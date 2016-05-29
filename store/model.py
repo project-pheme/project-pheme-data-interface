@@ -131,24 +131,24 @@ class Story(BaseModel):
     if since is None:
       since = datetime.utcfromtimestamp(0).replace(tzinfo=pytz.utc);
     if since.tzinfo is None:
-      raise Error("since date provided is tz-unaware!")
+      raise Exception("since date provided is tz-unaware!")
     #
     q = Template("""
       PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
 
-      select ?thread (MIN(?date) as ?created) where {
+      select ?thread (MIN(?date) as ?created_at) where {
           ?a a pheme:Tweet.
           ?a pheme:eventId "$event_id".
           ?a pheme:createdAt ?date.
           ?a sioc:has_container ?thread.
       } GROUP BY ?thread
-      HAVING(?created >= "$since_date"^^xsd:dateTime)
-      ORDER BY(?created)
+      HAVING(?created_at >= "$since_date"^^xsd:dateTime)
+      ORDER BY(?created_at)
       LIMIT $limit
     """).substitute(event_id=self.event_id, since_date=since.isoformat(), limit=limit)
     result = yield graphdb.query(q)
-    threads = map(lambda x: { "thread": x['thread'].decode(), "created": iso8601.parse_date(x['created'].decode()) }, result)
+    threads = map(lambda x: { "thread": Thread(uri=x['thread'].decode()), "created_at": iso8601.parse_date(x['created_at'].decode()) }, result)
     raise gen.Return(threads)
 
 
@@ -156,4 +156,110 @@ class Entity(BaseModel):
   __slots__ = [ 'uri', 'name', 'type' ]
 
   def __setattr__(self):
-    raise ReadOnlyError("Can't modify Channel instances!")
+    raise ReadOnlyError("Can't modify Entity instances!")
+
+
+class Thread(BaseModel):
+  __slots__ = [ 'uri', 'created_at', 'avg_rumour_coefficient', 'evidence' ]
+
+  def __setattr__(self):
+    raise ReadOnlyError("Can't modify Thread instances!")
+    
+  @staticmethod
+  @gen.coroutine
+  def find_on_channel(channel, since=None, limit=100, min_tweets=5):
+    if since is None:
+      since = datetime.utcfromtimestamp(0).replace(tzinfo=pytz.utc);
+    if since.tzinfo is None:
+      raise Exception("since date provided is tz-unaware!")
+    #
+    q = Template("""
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+
+      select ?thread (MIN(?date) as ?created_at) (AVG(?rc) as ?avg_rumour_coefficient)   where {
+          ?a a pheme:Tweet.
+          ?a pheme:createdAt ?date.
+          ?a sioc:has_container ?thread.
+          ?a pheme:rumourCoefficient ?rc.
+          ?a pheme:topicName "$topic_name".
+      } GROUP BY ?thread
+      HAVING(?created_at >= "$since_date"^^xsd:dateTime)
+      ORDER BY(?created_at)
+      LIMIT $limit
+    """).substitute(since_date=since.isoformat(), limit=limit, topic_name=channel.topic_name)
+    result = yield graphdb.query(q)
+    threads = map(lambda x: {
+      "thread": Thread(uri= x['thread'].decode(),
+                       created_at= iso8601.parse_date(x['created_at'].decode()),
+                       avg_rumour_coefficient= x['avg_rumour_coefficient'].decode()
+                       ),
+      "created_at": iso8601.parse_date(x['created_at'].decode())
+    }, result)
+    raise gen.Return(threads)
+    
+  @gen.coroutine
+  def fetch_evidentiality(self):
+    q = Template("""
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo>
+
+      select ?tweet ?evidence_uri where {
+          ?tweet a pheme:Tweet.
+          ?tweet sioc:has_container <$uri>.
+          ?tweet pheme:hasEvidentiality ?evidence.
+          ?tweet pheme:twitterEvidenceUri ?evidence_uri
+      }
+    """).substitute(uri=self.uri)
+    result = yield graphdb.query(q)
+    evidence_set = map(lambda x: { "uri": x['evidence_uri'].decode(), "tweet_ref": x['tweet'].decode() }, result)
+    object.__setattr__(self, "evidence", evidence_set)
+    raise gen.Return(evidence_set)
+
+  @gen.coroutine
+  def get_originating_tweet(self):
+    q = Template("""
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo>
+
+      select ?tweet ?date ?rc ?text where {
+          ?tweet a pheme:Tweet.
+          ?tweet sioc:has_container <$uri>.
+          ?tweet pheme:createdAt ?date.
+          ?tweet pheme:rumourCoefficient ?rc.
+          ?tweet dlpo:\#textualContent ?text.
+      }
+      ORDER BY(?date)
+      LIMIT 1
+    """).substitute(uri=self.uri)
+    result = yield graphdb.query(q)
+    if len(result) == 0:
+      raise gen.Return(None)
+    else:
+      for r in result: x = r
+      raise gen.Return(Tweet(
+        uri=x['tweet'].decode(),
+        created_at=iso8601.parse_date(x['date'].decode()),
+        rumour_coefficient=x['rc'].decode(),
+        textual_content=x['text']
+      ))
+
+
+class Tweet(BaseModel):
+  __slots__ = [ 'uri', 'created_at', 'rumour_coefficient', 'textual_content', ]
+
+  def __setattr__(self):
+    raise ReadOnlyError("Can't modify Tweet instances!")
+
+  @gen.coroutine
+  def get_author(self):
+    q = Template("""
+    """)
+
+class User(BaseModel):
+  __slots__ = [ 'uri', 'account_name', 'followers', 'friends' ]
+
+  def __setattr__(self):
+    raise ReadOnlyError("Can't modify User instances!")
