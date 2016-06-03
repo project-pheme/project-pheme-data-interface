@@ -1,7 +1,4 @@
-python-dateutil==2.4.2
 tornado==4.3
-#tornadis==0.7.0
-trequests==0.9.5
 rdflib==4.2.1
 pytz>=2016.3
 iso8601==0.1.11
