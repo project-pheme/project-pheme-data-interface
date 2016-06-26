@@ -2,3 +2,4 @@ tornado==4.3
 rdflib==4.2.1
 pytz>=2016.3
 iso8601==0.1.11
+tornado-json==1.2.2
