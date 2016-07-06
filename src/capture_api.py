@@ -39,7 +39,7 @@ def create_data_channel(spec):
   #     "endCaptureDate": .. end capture date ..
   #     "type": "search",
   #     "dataSources": [
-  #       { "twitter-source-1":
+  #       { "twitter":
   #         { "type": "Twitter"
   #           "chronologicalOrder": true,
   #           "fromLastTweetId": false / <tweet id>,
