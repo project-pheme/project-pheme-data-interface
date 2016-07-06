@@ -4,7 +4,7 @@ from my_json import loads, dumps
 from string import Template
 from copy import copy
 
-import logging, time, re, urllib, pytz
+import logging, time, re, urllib, pytz, os
 from datetime import datetime
 
 import model
@@ -12,13 +12,16 @@ from tasks import SelfRegulatingTask, register_task
 
 logger = logging.getLogger('tornado.general')
 
+platform_proto = os.environ["PLATFORM_PROTO"] if "PLATFORM_PROTO" in os.environ else "http"
+platform_host = os.environ["PLATFORM_HOST"] if "PLATFORM_HOST" in os.environ else "localhost"
+platform_port = os.environ["PLATFORM_PORT"] if "PLATFORM_PORT" in os.environ else "8080"
 
 USH_CLIENT_ID="ushahidiui"
 USH_CLIENT_SECRET="35e7f0bca957836d05ca0492211b0ac707671261"
 USH_USERNAME="admin"
 USH_PASSWORD="admin"
 
-USH_BASEURL="http://localhost:8080"
+USH_BASEURL=platform_proto + "://" + platform_host + ":" + platform_port
 
 required_post_types = {
   "Themes": {

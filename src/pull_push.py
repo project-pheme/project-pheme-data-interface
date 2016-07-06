@@ -33,8 +33,9 @@ class PullThemesGraphDb(object):
     raise gen.Return(stories)
 
   def set_consumed(self, chunk):
-    self.last_date = chunk[-1].last_activity
-    self._save_last_update(self.last_date)
+    if len(chunk) > 0:
+      self.last_date = chunk[-1].last_activity
+      self._save_last_update(self.last_date)
 
 
 # Push Themes (aka Stories) to ushahidi v3

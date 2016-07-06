@@ -1,6 +1,6 @@
 FROM alpine:3.3
 
-RUN apk add --update python python-dev py-pip gcc musl-dev linux-headers && \
+RUN apk add --update python python-dev py-pip gcc musl-dev linux-headers bash rsync curl && \
     rm -rf /var/cache/apk/*
 
 WORKDIR /var/app
@@ -12,4 +12,4 @@ COPY . /var/app/
 EXPOSE 8888
 
 ENTRYPOINT ["/bin/sh"]
-CMD [ "-c", "cd ./store ; python ./api.py --logging=info" ]
+CMD [ "/var/app/run.sh" ]

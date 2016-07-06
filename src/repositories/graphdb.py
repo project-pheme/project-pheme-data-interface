@@ -7,11 +7,13 @@ from rdflib.plugins.sparql.results.jsonresults import JSONResult
 from datetime import datetime
 
 from string import Template
-import logging, urllib, pytz
+import logging, urllib, pytz, os
 
 import iso8601
 
-GRAPHDB_ENDPOINT = 'http://pheme.ontotext.com/graphdb/repositories/pheme'
+GRAPHDB_ENDPOINT = os.environ["GRAPHDB_ENDPOINT"] if "GRAPHDB_ENDPOINT" in os.environ else 'http://pheme.ontotext.com/graphdb/repositories/pheme'
+
+GRAPHDB_PHEME_VERSION="v7"
 
 logger = logging.getLogger('tornado.general')
 
@@ -57,12 +59,19 @@ class Story(model.Story):   # aka Theme / Pheme
       where {   
           ?a pheme:createdAt ?date.
           ?a pheme:eventId ?eventId.
-          ?a pheme:topicName "pheme_en_graphdb".
+          FILTER (xsd:integer(?eventId) > -1).
+          ?a pheme:dataChannel "$data_channel_id".
+          ?a pheme:version "$pheme_version".
       } GROUP BY (?eventId)
       having ((?size >= $min_tweets) && (?lastUpdate >= "$since_date"^^xsd:dateTime))
       order by ?lastUpdate
       limit $limit
-    """).substitute(since_date=datetime_to_iso(since), limit=limit, min_tweets=min_tweets)
+    """).substitute(
+      data_channel_id=channel._id,
+      since_date=datetime_to_iso(since),
+      pheme_version=GRAPHDB_PHEME_VERSION,
+      limit=limit,
+      min_tweets=min_tweets)
     result = yield query(q)
     stories = map(lambda x:
                    Story(channel_id=channel._id,
@@ -78,6 +87,54 @@ class Story(model.Story):   # aka Theme / Pheme
     # Grab featured tweet in Theme
     # (currently, the oldest)
     q = Template("""
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+      select ?thread ?source ?text ?userName ?userHandle ?date (count(?a) as ?countReplies) where {   
+        ?a a pheme:ReplyingTweet .
+        ?source a pheme:SourceTweet.
+        ?source sioc:has_container ?thread.
+        ?source sioc:has_creator ?creator.
+        ?creator foaf:name ?userName.
+        ?creator foaf:accountName ?userHandle.
+        ?source pheme:createdAt ?date.
+        ?source dlpo:textualContent ?text.
+        ?a sioc:has_container ?thread.
+        ?a pheme:eventId "$event_id".
+        ?a pheme:version "$pheme_version".
+      } GROUP BY ?thread ?source ?text ?userName ?userHandle ?date
+      order by desc(?countReplies)
+      limit 1
+    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    result = yield query(q)
+    assert len(result) == 1   # Because of grouping, there must always be a result row
+
+    # If there were no real results from the query, try an alternative one
+    x = iter(result).next()
+    if x['text'] is None:
+      logger.info("No replies / retweets in cluster, using alternative query")
+      x = yield self._get_featured_tweet_alt()
+    # Use results
+    if x is not None and x['text'] is not None:
+      logger.info("Representative tweet: " + str(x))
+      raise gen.Return(dict(
+        text= unicode(x['text']),
+        date= iso8601.parse_date(x['date'].decode()),
+        user= dict(
+          profile_image_url = 'https://lh6.ggpht.com/Gg2BA4RXi96iE6Zi_hJdloQAZxO6lC6Drpdr7ouKAdCbEcE_Px-1o4r8bg8ku_xzyF4y=h900',
+          user_description= x['userName'],
+          user_screen_name= x['userHandle'])
+        ))
+
+  @gen.coroutine
+  def _get_featured_tweet_alt(self):
+    # Just retrieve the oldest tweet from an event
+    q = Template("""
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
       PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
       PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo#>
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
@@ -91,21 +148,15 @@ class Story(model.Story):   # aka Theme / Pheme
         ?a sioc:has_creator ?u.
         ?u foaf:name ?userName.
         ?u foaf:accountName ?userHandle.
+        ?a pheme:version "$pheme_version".
       }
       order by ?date
       limit 1
-    """).substitute(event_id=self.event_id)
+    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
     if len(result) == 1:
-      for x in result:
-        raise gen.Return(dict(
-          text= unicode(x['text']),
-          date= iso8601.parse_date(x['date'].decode()),
-          user= dict(
-            profile_image_url = 'https://lh6.ggpht.com/Gg2BA4RXi96iE6Zi_hJdloQAZxO6lC6Drpdr7ouKAdCbEcE_Px-1o4r8bg8ku_xzyF4y=h900',
-            user_description= x['userName'],
-            user_screen_name= x['userHandle'])
-          ))
+      tweet = iter(result).next()
+      raise gen.Return(tweet)
 
   @gen.coroutine
   def get_linked_images(self):
