@@ -131,6 +131,60 @@ class Story(model.Story):   # aka Theme / Pheme
         ))
 
   @gen.coroutine
+  def get_linked_images(self):
+    q = Template("""
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+      select ?date ?text ?thread ?imageURL where {   
+          ?a pheme:createdAt ?date.
+          ?a sioc:has_container ?thread .
+          ?a pheme:hasEvidentialityPicture ?imageURL .
+          ?a dlpo:textualContent ?text.
+          ?a pheme:eventId "$event_id".
+          ?a pheme:version "v7"
+      } order by desc(?date)
+    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    result = yield query(q)
+
+    raise gen.Return(map(lambda x: dict(
+                          date= iso8601.parse_date(x['date'].decode()),
+                          text= unicode(x['text']),
+                          thread= x['thread'].decode(),
+                          imgUrl= x['imageURL'].decode()),
+                         result))
+
+  @gen.coroutine
+  def get_related_articles(self):
+    q = Template("""
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+      select ?date ?text ?thread ?URL where {   
+          ?a pheme:createdAt ?date.
+          ?a sioc:has_container ?thread .
+          ?a pheme:hasEvidentialityUrl ?URL .
+          ?a dlpo:textualContent ?text.
+          ?a pheme:eventId "$event_id".
+          ?a pheme:version "v7"
+      } order by desc(?date)
+    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    result = yield query(q)
+
+    raise gen.Return(map(lambda x: dict(
+                          date= iso8601.parse_date(x['date'].decode()),
+                          text= unicode(x['text']),
+                          thread= x['thread'].decode(),
+                          url= x['URL'].decode()),
+                         result))
+
+  @gen.coroutine
   def _get_featured_tweet_alt(self):
     # Just retrieve the oldest tweet from an event
     q = Template("""
@@ -157,16 +211,6 @@ class Story(model.Story):   # aka Theme / Pheme
     if len(result) == 1:
       tweet = iter(result).next()
       raise gen.Return(tweet)
-
-  @gen.coroutine
-  def get_linked_images(self):
-    # Images appearing in the Story (cluster)
-    raise Exception("not implemented")
-
-  @gen.coroutine
-  def get_related_articles(self):
-    # Articles referenced from the Story (cluster) tweets
-    raise Exception("not implemented")
 
   @gen.coroutine
   def get_author_geolocations(self):

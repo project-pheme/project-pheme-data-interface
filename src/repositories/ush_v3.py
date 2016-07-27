@@ -15,11 +15,11 @@ logger = logging.getLogger('tornado.general')
 platform_proto = os.environ["PLATFORM_PROTO"] if "PLATFORM_PROTO" in os.environ else "http"
 platform_host = os.environ["PLATFORM_HOST"] if "PLATFORM_HOST" in os.environ else "localhost"
 platform_port = os.environ["PLATFORM_PORT"] if "PLATFORM_PORT" in os.environ else "8080"
+ush_username = os.environ["USH_USERNAME"] if "USH_USERNAME" in os.environ else "admin"
+ush_password = os.environ["USH_PASSWORD"] if "USH_PASSWORD" in os.environ else "admin"
 
 USH_CLIENT_ID="ushahidiui"
 USH_CLIENT_SECRET="35e7f0bca957836d05ca0492211b0ac707671261"
-USH_USERNAME="admin"
-USH_PASSWORD="admin"
 
 USH_BASEURL=platform_proto + "://" + platform_host + ":" + platform_port
 
@@ -133,6 +133,23 @@ class Story(model.Story):
       if hasattr(story, k):
         object.__setattr__(n, k, getattr(story, k))
     return n
+
+  @staticmethod
+  @gen.coroutine
+  def find_by_post_id(post_id):
+    post = yield get_link().do_request("/api/v3/posts/%s" % str(post_id), method='GET')
+    if 'errors' in post:
+      raise gen.Return(None)
+    else:
+      story = Story(
+        event_id= post["values"]["theme-id"][0],
+        channel_id= post["values"]["theme-channel-id"][0],
+        size= post["values"]["theme-size"][0],
+        start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
+        last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
+        featured_tweet= loads(post["values"]["theme-featured-tweet"][0])
+        )
+      raise gen.Return(story)
 
   @staticmethod
   @gen.coroutine
@@ -252,8 +269,8 @@ class UshahidiV3Link(object):
           client_id= USH_CLIENT_ID,
           client_secret= USH_CLIENT_SECRET,
           grant_type= "password",
-          username= USH_USERNAME,
-          password= USH_PASSWORD,
+          username= ush_username,
+          password= ush_password,
           scope= "posts media forms api tags savedsearches sets users stats layers config messages notifications contacts roles permissions csv dataproviders",
       )
 

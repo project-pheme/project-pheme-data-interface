@@ -19,14 +19,18 @@ class ModelAPIHandler(APIHandler):
       return super(ModelAPIHandler, self).write()
     self._write_buffer.append(chunk)
 
-class StoryThreadHandler(ModelAPIHandler):
+class StoryDetailHandler(ModelAPIHandler):
   __urls__ = [ '/api/stories/(?P<story_id>[a-zA-Z0-9_\\-]+)' ]
 
   @gen.coroutine
   def get(self, story_id):
-    story = yield ush_v3.Story.find_by_id(story_id)
+    story = yield ush_v3.Story.find_by_post_id(story_id)
     if not story:
       self.error("story %s is not in the database" % story_id)
-    else:
-      threads = yield graphdb.Thread.fetch_from_story(story)
-      self.success(threads)
+      return
+    graphdb_story = graphdb.Story(event_id= story.event_id)
+    story = story.obj()
+    story['images'] = yield graphdb_story.get_linked_images()
+    story['articles'] = yield graphdb_story.get_related_articles()
+    story['threads'] = yield graphdb.Thread.fetch_from_story(story)
+    self.success(story)
