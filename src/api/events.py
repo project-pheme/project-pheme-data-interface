@@ -101,6 +101,10 @@ class EventScopeHandler(ModelAPIHandler):
       # defaults to 1 rotation around the sun from now
       self.body["endCaptureDate"] = (datetime.now() + timedelta(days=365, hours=5, minutes=48, seconds=46)).strftime("%Y-%m-%d %H:%M:%S.000")
     #
+    for ds in self.body["dataSources"]:
+      if not "chronologicalOrder" in ds:
+        ds["chronologicalOrder"] = True
+    #
     response = yield capture_api.create_data_channel(self.body)
     logger.info("Reply from Capture : " + str(response))
     if "state" in response and response["state"] == "200 OK" and "data" in response and "_global_id" in response["data"]:
