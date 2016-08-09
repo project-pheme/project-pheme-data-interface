@@ -102,8 +102,8 @@ class EventScopeHandler(ModelAPIHandler):
       self.body["endCaptureDate"] = (datetime.now() + timedelta(days=365, hours=5, minutes=48, seconds=46)).strftime("%Y-%m-%d %H:%M:%S.000")
     #
     for ds in self.body["dataSources"]:
-      if not "chronologicalOrder" in ds:
-        ds["chronologicalOrder"] = True
+      if not "chronologicalOrder" in ds["twitter"]:
+        ds["twitter"]["chronologicalOrder"] = True
     #
     response = yield capture_api.create_data_channel(self.body)
     logger.info("Reply from Capture : " + str(response))

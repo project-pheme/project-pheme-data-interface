@@ -5,7 +5,7 @@ from tornado_json.application import Application
 from tornado.ioloop import IOLoop
 from tornado.options import parse_command_line
 from datetime import datetime
-import json, signal
+import json, signal, os
 import logging
 
 from model import *
@@ -16,6 +16,8 @@ import state
 
 logger = logging.getLogger('tornado.general')
 
+theme_pull_period = os.environ["THEME_PULL_PERIOD"] if "THEME_PULL_PERIOD" in os.environ else "300"
+theme_pull_period = int(theme_pull_period)
 
 def make_app():
   import api
@@ -38,7 +40,7 @@ def initialise_tasks():
   # Initialise pull/push routine for each of the events/channels
   for (event_id, event) in ush_v3.get_link().events.iteritems():
     logger.info("Starting pull/push routine for event=%s (%s)" % (event_id, event.display_name))
-    t = pull_push.create_themes_pull_task(event, period=10, first_delay=(0,2))
+    t = pull_push.create_themes_pull_task(event, period=theme_pull_period, first_delay=(0,15))
     register_task(t, start=True)
 
 def on_shutdown():

@@ -46,6 +46,7 @@ def create_data_channel(spec):
   #           "keywords": " ... " }
   #       } ]
   #   }
+  logger.info("Sending to capture: \n" + dumps(spec, indent=2))
   result = yield _do_request("/datachannel", method="POST", body=dumps(spec))
   raise gen.Return(result)
 
