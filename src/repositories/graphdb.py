@@ -139,22 +139,20 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      select ?date ?text ?thread ?imageURL where {   
-          ?a pheme:createdAt ?date.
-          ?a sioc:has_container ?thread .
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+      select (MIN(?cDate) as ?date) ?imageURL (count(?imageURL) as ?countImage) where {   
+          ?a pheme:createdAt ?cDate .
           ?a pheme:hasEvidentialityPicture ?imageURL .
-          ?a dlpo:textualContent ?text.
           ?a pheme:eventId "$event_id".
-          ?a pheme:version "v7"
-      } order by desc(?date)
+          ?a pheme:version "$pheme_version"
+      } group by ?imageURL
     """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
 
     raise gen.Return(map(lambda x: dict(
                           date= iso8601.parse_date(x['date'].decode()),
-                          text= unicode(x['text']),
-                          thread= x['thread'].decode(),
-                          imgUrl= x['imageURL'].decode()),
+                          imgUrl= x['imageURL'].decode(),
+                          count= int(x['countImage'].decode())),
                          result))
 
   @gen.coroutine
