@@ -35,6 +35,7 @@ required_post_types = {
         { "label": "Last activity",    "type": "datetime", "input": "date",   "required": True, "key": "theme-last-activity" },
         { "label": "Average activity", "type": "decimal",  "input": "number", "required": True, "key": "theme-average-activity" },
         { "label": "Featured tweet",   "type": "text",     "input": "textarea", "required": True, "key": "theme-featured-tweet" },
+        { "label": "Controversiality", "type": "decimal",  "input": "number", "required": True, "key": "theme-controversiality"},
       ]
     }]
   }
@@ -147,7 +148,8 @@ class Story(model.Story):
         size= post["values"]["theme-size"][0],
         start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
         last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
-        featured_tweet= loads(post["values"]["theme-featured-tweet"][0])
+        featured_tweet= loads(post["values"]["theme-featured-tweet"][0]),
+        controversiality = float(post["values"]["theme-controversiality"][0])
         )
       raise gen.Return(story)
 
@@ -167,7 +169,8 @@ class Story(model.Story):
         size= post["values"]["theme-size"][0],
         start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
         last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
-        featured_tweet= loads(post["values"]["theme-featured-tweet"][0])
+        featured_tweet= loads(post["values"]["theme-featured-tweet"][0]),
+        controversiality = float(post["values"]["theme-controversiality"][0])
         )
       raise gen.Return(story)
 
@@ -195,6 +198,7 @@ class Story(model.Story):
     post["values"]["theme-last-activity" ] = [ datetime_to_string(self.last_activity) ]
     post["values"]["theme-average-activity"] = [ "%0.2f" % self.average_activity ]
     post["values"]["theme-featured-tweet"] = [ dumps(self.featured_tweet) ]
+    post["values"]["theme-controversiality"] = [ "%0.2f" % self.controversiality ]
     # Add some other derived metadata if not present
     if "created" not in post: post["created"] = datetime_to_timestamp(self.start_date)
     if "title" not in post: post["title"] = "ID %s" % str(self.event_id)

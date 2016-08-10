@@ -45,7 +45,8 @@ class PushThemesUshV3(object):
     for story in chunk:
       # Convert data model to V3 and save
       featured_tweet = yield story.get_featured_tweet()
-      v3_story = ush_v3.Story.as_copy(story, featured_tweet=featured_tweet)
+      controversiality = yield story.get_controversiality_score()
+      v3_story = ush_v3.Story.as_copy(story, featured_tweet=featured_tweet, controversiality=controversiality)
       yield v3_story.save()
 
 

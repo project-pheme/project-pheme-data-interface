@@ -211,6 +211,41 @@ class Story(model.Story):   # aka Theme / Pheme
       raise gen.Return(tweet)
 
   @gen.coroutine
+  def get_controversiality_score(self):
+    #
+    q = Template("""
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+      select ?sdq_type (count(?sdq_type) as ?count) where {
+        ?a a pheme:Tweet .
+        ?a pheme:eventId "$event_id".
+        ?a pheme:sdq ?sdq_type .
+        ?a pheme:version "$pheme_version" .
+      } group by ?sdq_type
+    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    result = yield query(q)
+
+    # v will hold the count for each sdq_type
+    v = dict(deny=0.0, support=0.0, question=0.0)
+    for x in result:
+      sdq_type = x['sdq_type'].decode()
+      sdq_count = int(x['count'].decode())
+      v[sdq_type] = float(sdq_count)
+    # c holds the sum of the counts
+    c = reduce(lambda c,k: c + v[k], v.keys(), 0.0)
+    # avoid division by 0
+    if c == 0.0:
+      raise gen.Return(0.0)
+    else:
+      score = (1.0/3.0) * (
+                pow(v['support'] / c - (1.0/3.0), 2) +
+                pow(v['deny'] / c - (1.0/3.0), 2) +
+                pow(v['question'] / c - (1.0/3.0), 2)
+              )
+      raise gen.Return(1.0 - (9.0/2.0) * score)
+
+  @gen.coroutine
   def get_author_geolocations(self):
     # Articles referenced from the Story (cluster) tweets
     raise Exception("not implemented")
