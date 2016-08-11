@@ -7,7 +7,7 @@ from rdflib.plugins.sparql.results.jsonresults import JSONResult
 from datetime import datetime
 
 from string import Template
-import logging, urllib, pytz, os
+import logging, urllib, pytz, os, re
 
 import iso8601
 
@@ -23,6 +23,13 @@ def datetime_to_iso(dt, default=0):
   if dt.tzinfo is None:
     raise Exception("datetime provided is tz-unaware!")
   return dt.isoformat()
+
+def _avatar_process(url):
+  if url is not None and url != "":
+    return re.sub(r'_normal\.([a-z]{3,5})$', r'_bigger.\1', url)
+  else:
+    # default avatar (egg)
+    return "https://abs.twimg.com/sticky/default_profile_images/default_profile_2_bigger.png"
 
 @gen.coroutine
 def query(query):
@@ -94,19 +101,20 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
-      select ?thread ?source ?text ?userName ?userHandle ?date (count(?a) as ?countReplies) where {   
+      select ?thread ?source ?text ?userName ?userHandle ?date (count(?a) as ?countReplies) ?avatar where {   
         ?a a pheme:ReplyingTweet .
         ?source a pheme:SourceTweet.
         ?source sioc:has_container ?thread.
         ?source sioc:has_creator ?creator.
         ?creator foaf:name ?userName.
         ?creator foaf:accountName ?userHandle.
+        OPTIONAL { ?creator foaf:depiction ?avatar. }
         ?source pheme:createdAt ?date.
         ?source dlpo:textualContent ?text.
         ?a sioc:has_container ?thread.
         ?a pheme:eventId "$event_id".
         ?a pheme:version "$pheme_version".
-      } GROUP BY ?thread ?source ?text ?userName ?userHandle ?date
+      } GROUP BY ?thread ?source ?text ?userName ?userHandle ?date ?avatar
       order by desc(?countReplies)
       limit 1
     """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
@@ -125,7 +133,7 @@ class Story(model.Story):   # aka Theme / Pheme
         text= unicode(x['text']),
         date= iso8601.parse_date(x['date'].decode()),
         user= dict(
-          profile_image_url = 'https://lh6.ggpht.com/Gg2BA4RXi96iE6Zi_hJdloQAZxO6lC6Drpdr7ouKAdCbEcE_Px-1o4r8bg8ku_xzyF4y=h900',
+          profile_image_url = _avatar_process(x['avatar']),
           user_description= x['userName'],
           user_screen_name= x['userHandle'])
         ))
@@ -192,7 +200,7 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      select ?a ?text ?date ?userName ?userHandle
+      select ?a ?text ?date ?userName ?userHandle ?avatar
       where {
         ?a pheme:eventId "$event_id".
         ?a pheme:createdAt ?date.
@@ -200,6 +208,7 @@ class Story(model.Story):   # aka Theme / Pheme
         ?a sioc:has_creator ?u.
         ?u foaf:name ?userName.
         ?u foaf:accountName ?userHandle.
+        OPTIONAL { ?u foaf:depiction ?avatar. }
         ?a pheme:version "$pheme_version".
       }
       order by ?date
