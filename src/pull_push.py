@@ -43,6 +43,22 @@ class PullThemesGraphDb(object):
 class PushThemesUshV3(object):
   def __init__(self, min_cluster_size=2):
     self.min_cluster_size = min_cluster_size
+
+  # This is an optimisation to avoid processing stories that haven't changed
+  def _size_remember(self, story):
+    state.set("story_cached_data.%s.size" % story._id, int(story.size))
+
+  @gen.coroutine
+  def _size_has_grown(self, story, size):
+    if size is None:
+      raise Exception("Can't tell if story of unknown size has grown!")
+    #
+    v = yield state.get("story_cached_data.%s.size" % story._id)
+    if v is None:
+      raise gen.Return(True)
+    else:
+      raise gen.Return(int(size) > int(v))
+
   @gen.coroutine
   def push(self, chunk):    # push chunk
     for story in chunk:
@@ -54,9 +70,16 @@ class PushThemesUshV3(object):
       if xmeta['size'] < self.min_cluster_size:
         logger.info("Skipping story %s because it's too small (size=%d)" % (story._id, xmeta['size']))
         continue
+      # Skip clusters that haven't grown
+      if not self._size_has_grown(story, xmeta['size']):
+        logger.info("Skipping story %s because it hasn't grown" % story._id)
+        continue
 
+      # The story may have evolved, fetch more details
       featured_tweet = yield story.get_featured_tweet()
       controversiality = yield story.get_controversiality_score()
+
+      # Create and save the story on the ush_v3 repository
       v3_story = ush_v3.Story.as_copy(story,
         size= xmeta['size'],
         start_date= xmeta['start_date'],
@@ -65,9 +88,11 @@ class PushThemesUshV3(object):
         verified_count = xmeta['verified_count'],
         featured_tweet= featured_tweet,
         controversiality= controversiality)
-      v3_story.update_calculated()      
 
       yield v3_story.save()
+
+      # Save size of the story in case we see it again (used by _size_has_grown)
+      self._size_remember(v3_story)
 
 
 # Remember to set

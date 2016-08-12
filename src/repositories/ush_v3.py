@@ -137,6 +137,7 @@ class Story(model.Story):
     for k in model.Story.__slots__:
       if hasattr(story, k):
         object.__setattr__(n, k, getattr(story, k))
+    n.update_calculated()
     return n
 
   @staticmethod
