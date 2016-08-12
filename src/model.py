@@ -39,7 +39,9 @@ class Story(BaseModel):
 
   def __init__(self, **kwargs):
     super(Story, self).__init__(**kwargs)
+    self.update_calculated()
 
+  def update_calculated(self):
     # Initialize calculated properties
     if (hasattr(self, 'size') and self.size is not None) and \
        (hasattr(self, 'start_date') and self.start_date is not None) and \

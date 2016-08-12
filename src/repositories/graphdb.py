@@ -55,36 +55,31 @@ import model
 class Story(model.Story):   # aka Theme / Pheme
   @staticmethod
   @gen.coroutine
-  def fetch_updated_since(channel, since=None, limit=100, min_tweets=2):
+  def fetch_updated_since(channel, since=None, limit=100):
     # Query graphdb for latest events belonging to the given channel
     q = Template("""
       PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
-      select ?eventId
-                (MIN(?date) as ?startDate)
-                (MAX(?date) as ?lastUpdate)
-                (count(?a) as ?size)
-      where {   
+      SELECT ?eventId
+             (MAX(?date) AS ?lastUpdate)
+      WHERE {   
           ?a pheme:createdAt ?date.
+          FILTER (?date >= "$since_date"^^xsd:dateTime).
           ?a pheme:eventId ?eventId.
           FILTER (xsd:integer(?eventId) > -1).
           ?a pheme:dataChannel "$data_channel_id".
           ?a pheme:version "$pheme_version".
       } GROUP BY (?eventId)
-      having ((?size >= $min_tweets) && (?lastUpdate >= "$since_date"^^xsd:dateTime))
-      order by ?lastUpdate
-      limit $limit
+      ORDER BY ?lastUpdate
+      LIMIT $limit
     """).substitute(
       data_channel_id=channel._id,
       since_date=datetime_to_iso(since),
       pheme_version=GRAPHDB_PHEME_VERSION,
-      limit=limit,
-      min_tweets=min_tweets)
+      limit=limit)
     result = yield query(q)
     stories = map(lambda x:
                    Story(channel_id=channel._id,
                          event_id=x['eventId'].decode(),
-                         size=int(x['size'].decode()),
-                         start_date=iso8601.parse_date(x['startDate'].decode()),
                          last_activity=iso8601.parse_date(x['lastUpdate'].decode())
                          ), result)
     raise gen.Return(stories)
@@ -97,10 +92,13 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
 
       select (sum(xsd:integer(xsd:boolean(?verified))) as ?verified_count) 
-                     (count(distinct ?imageURL) as ?img_count) 
-                     (count(distinct ?URL) as ?pub_count)
+             (count(distinct ?imageURL) as ?img_count) 
+             (count(distinct ?URL) as ?pub_count)
+             (count(?a) as ?size)
+             (MIN(?date) as ?start_date)
       where {   
         ?a a pheme:Tweet .
+        ?a pheme:createdAt ?date.        
         ?a pheme:eventId "$event_id" .
         ?a pheme:version "$pheme_version" .
         OPTIONAL {?a pheme:hasEvidentialityPicture ?imageURL} .
@@ -114,6 +112,8 @@ class Story(model.Story):   # aka Theme / Pheme
 
     x = iter(result).next()
     raise gen.Return(dict(
+      size= int(x['size'].decode()),
+      start_date= iso8601.parse_date(x['start_date'].decode()),
       verified_count= int(x['verified_count'].decode()),
       img_count= int(x['img_count'].decode()),
       pub_count = int(x['pub_count'].decode())
