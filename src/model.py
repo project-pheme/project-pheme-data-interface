@@ -33,7 +33,9 @@ class Channel(BaseModel):
 
 
 class Story(BaseModel):
-  __slots__ = [ 'channel_id', 'event_id', 'size', 'start_date', 'last_activity', 'average_activity', 'controversiality' ]
+  __slots__ = [ 'channel_id', 'event_id', 'size',
+    'start_date', 'last_activity', 'average_activity', 
+    'controversiality', 'pub_count', 'img_count', 'verified_count' ]
 
   def __init__(self, **kwargs):
     super(Story, self).__init__(**kwargs)

@@ -90,6 +90,36 @@ class Story(model.Story):   # aka Theme / Pheme
     raise gen.Return(stories)
 
   @gen.coroutine
+  def get_extended_metadata(self):
+    q = Template("""
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+
+      select (sum(xsd:integer(xsd:boolean(?verified))) as ?verified_count) 
+                     (count(distinct ?imageURL) as ?img_count) 
+                     (count(distinct ?URL) as ?pub_count)
+      where {   
+        ?a a pheme:Tweet .
+        ?a pheme:eventId "$event_id" .
+        ?a pheme:version "$pheme_version" .
+        OPTIONAL {?a pheme:hasEvidentialityPicture ?imageURL} .
+        OPTIONAL {?a pheme:hasEvidentialityUrl ?URL} .
+        ?a sioc:has_creator ?user .
+        ?user pheme:twitterUserVerified ?verified .  
+      }
+    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    result = yield query(q)
+    assert len(result) == 1
+
+    x = iter(result).next()
+    raise gen.Return(dict(
+      verified_count= int(x['verified_count'].decode()),
+      img_count= int(x['img_count'].decode()),
+      pub_count = int(x['pub_count'].decode())
+    ))
+
+  @gen.coroutine
   def get_featured_tweet(self):
     # Grab featured tweet in Theme
     # (currently, the oldest)

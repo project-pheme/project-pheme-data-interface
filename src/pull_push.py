@@ -44,9 +44,15 @@ class PushThemesUshV3(object):
   def push(self, chunk):    # push chunk
     for story in chunk:
       # Convert data model to V3 and save
+      xmeta = yield story.get_extended_metadata()
       featured_tweet = yield story.get_featured_tweet()
       controversiality = yield story.get_controversiality_score()
-      v3_story = ush_v3.Story.as_copy(story, featured_tweet=featured_tweet, controversiality=controversiality)
+      v3_story = ush_v3.Story.as_copy(story,
+        img_count= xmeta['img_count'],
+        pub_count= xmeta['pub_count'],
+        verified_count = xmeta['verified_count'],
+        featured_tweet= featured_tweet,
+        controversiality= controversiality)
       yield v3_story.save()
 
 

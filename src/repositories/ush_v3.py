@@ -36,6 +36,9 @@ required_post_types = {
         { "label": "Average activity", "type": "decimal",  "input": "number", "required": True, "key": "theme-average-activity" },
         { "label": "Featured tweet",   "type": "text",     "input": "textarea", "required": True, "key": "theme-featured-tweet" },
         { "label": "Controversiality", "type": "decimal",  "input": "number", "required": True, "key": "theme-controversiality"},
+        { "label": "Publication count","type": "int",      "input": "number", "required": True, "key": "theme-pub-count" },
+        { "label": "Image count",      "type": "int",      "input": "number", "required": True, "key": "theme-img-count" },
+        { "label": "Verified count",   "type": "int",      "input": "number", "required": True, "key": "theme-verified-count" },
       ]
     }]
   }
@@ -149,7 +152,10 @@ class Story(model.Story):
         start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
         last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
         featured_tweet= loads(post["values"]["theme-featured-tweet"][0]),
-        controversiality = float(post["values"]["theme-controversiality"][0])
+        controversiality = float(post["values"]["theme-controversiality"][0]),
+        img_count = post["values"]["theme-img-count"][0],
+        pub_count = post["values"]["theme-pub-count"][0],
+        verified_count = post["values"]["theme-verified-count"][0]
         )
       raise gen.Return(story)
 
@@ -170,7 +176,10 @@ class Story(model.Story):
         start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
         last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
         featured_tweet= loads(post["values"]["theme-featured-tweet"][0]),
-        controversiality = float(post["values"]["theme-controversiality"][0])
+        controversiality = float(post["values"]["theme-controversiality"][0]),
+        img_count = post["values"]["theme-img-count"][0],
+        pub_count = post["values"]["theme-pub-count"][0],
+        verified_count = post["values"]["theme-verified-count"][0]
         )
       raise gen.Return(story)
 
@@ -199,6 +208,9 @@ class Story(model.Story):
     post["values"]["theme-average-activity"] = [ "%0.2f" % self.average_activity ]
     post["values"]["theme-featured-tweet"] = [ dumps(self.featured_tweet) ]
     post["values"]["theme-controversiality"] = [ "%0.2f" % self.controversiality ]
+    post["values"]["theme-img-count"] = [ self.img_count ]
+    post["values"]["theme-pub-count"] = [ self.pub_count ]
+    post["values"]["theme-verified-count"] = [ self.verified_count ]
     # Add some other derived metadata if not present
     if "created" not in post: post["created"] = datetime_to_timestamp(self.start_date)
     if "title" not in post: post["title"] = "ID %s" % str(self.event_id)
