@@ -42,6 +42,7 @@ def query(query):
       'Content-Type': 'application/x-www-form-urlencoded'
       },
     body=urllib.urlencode({ 'query': query }),
+    request_timeout=15.0
     )
   http_client = AsyncHTTPClient()
   response = yield http_client.fetch(r)
@@ -101,12 +102,13 @@ class Story(model.Story):   # aka Theme / Pheme
         ?a pheme:createdAt ?date.        
         ?a pheme:eventId "$event_id" .
         ?a pheme:version "$pheme_version" .
+        ?a pheme:dataChannel "$data_channel_id".
         OPTIONAL {?a pheme:hasEvidentialityPicture ?imageURL} .
         OPTIONAL {?a pheme:hasEvidentialityUrl ?URL} .
         ?a sioc:has_creator ?user .
         ?user pheme:twitterUserVerified ?verified .  
       }
-    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
     assert len(result) == 1
 
@@ -143,11 +145,12 @@ class Story(model.Story):   # aka Theme / Pheme
         ?source dlpo:textualContent ?text.
         ?a sioc:has_container ?thread.
         ?a pheme:eventId "$event_id".
+        ?a pheme:dataChannel "$data_channel_id".
         ?a pheme:version "$pheme_version".
       } GROUP BY ?thread ?source ?text ?userName ?userHandle ?date ?avatar
       order by desc(?countReplies)
       limit 1
-    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
     assert len(result) == 1   # Because of grouping, there must always be a result row
 
@@ -182,9 +185,11 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a pheme:createdAt ?cDate .
           ?a pheme:hasEvidentialityPicture ?imageURL .
           ?a pheme:eventId "$event_id".
+          ?a pheme:dataChannel "$data_channel_id".
           ?a pheme:version "$pheme_version"
       } group by ?imageURL
-    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+      having (?countImage > 0)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
 
     raise gen.Return(map(lambda x: dict(
@@ -208,9 +213,10 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a pheme:hasEvidentialityUrl ?URL .
           ?a dlpo:textualContent ?text.
           ?a pheme:eventId "$event_id".
+          ?a pheme:dataChannel "$data_channel_id".
           ?a pheme:version "v7"
       } order by desc(?date)
-    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
 
     raise gen.Return(map(lambda x: dict(
@@ -233,6 +239,7 @@ class Story(model.Story):   # aka Theme / Pheme
       select ?a ?text ?date ?userName ?userHandle ?avatar
       where {
         ?a pheme:eventId "$event_id".
+        ?a pheme:dataChannel "$data_channel_id".
         ?a pheme:createdAt ?date.
         ?a dlpo:textualContent ?text.
         ?a sioc:has_creator ?u.
@@ -243,7 +250,7 @@ class Story(model.Story):   # aka Theme / Pheme
       }
       order by ?date
       limit 1
-    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
     if len(result) == 1:
       tweet = iter(result).next()
@@ -259,10 +266,11 @@ class Story(model.Story):   # aka Theme / Pheme
       select ?sdq_type (count(?sdq_type) as ?count) where {
         ?a a pheme:Tweet .
         ?a pheme:eventId "$event_id".
+        ?a pheme:dataChannel "$data_channel_id".
         ?a pheme:sdq ?sdq_type .
         ?a pheme:version "$pheme_version" .
       } group by ?sdq_type
-    """).substitute(event_id=self.event_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
 
     # v will hold the count for each sdq_type

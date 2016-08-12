@@ -28,7 +28,7 @@ class StoryDetailHandler(ModelAPIHandler):
     if not story:
       self.error("story %s is not in the database" % story_id)
       return
-    graphdb_story = graphdb.Story(event_id= story.event_id)
+    graphdb_story = graphdb.Story(channel_id= story.channel_id, event_id= story.event_id)
     story = story.obj()
     story['images'] = yield graphdb_story.get_linked_images()
     story['articles'] = yield graphdb_story.get_related_articles()

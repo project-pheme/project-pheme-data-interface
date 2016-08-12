@@ -30,6 +30,7 @@ required_post_types = {
       "fields": [ 
         { "label": "Theme ID",         "type": "varchar",  "input": "text",   "required": True, "key": "theme-id" },
         { "label": "Channel ID",       "type": "varchar",  "input": "text",   "required": True, "key": "theme-channel-id" },
+        { "label": "Event ID",         "type": "varchar",  "input": "text",   "required": True, "key": "theme-event-id" },
         { "label": "Size",             "type": "int",      "input": "number", "required": True, "key": "theme-size" },
         { "label": "Start date",       "type": "datetime", "input": "date",   "required": True, "key": "theme-start-date" },
         { "label": "Last activity",    "type": "datetime", "input": "date",   "required": True, "key": "theme-last-activity" },
@@ -146,7 +147,7 @@ class Story(model.Story):
       raise gen.Return(None)
     else:
       story = Story(
-        event_id= post["values"]["theme-id"][0],
+        event_id= post["values"]["theme-event-id"][0],
         channel_id= post["values"]["theme-channel-id"][0],
         size= post["values"]["theme-size"][0],
         start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
@@ -161,18 +162,18 @@ class Story(model.Story):
 
   @staticmethod
   @gen.coroutine
-  def find_by_id(event_id):
+  def find_by_id(_id):
     form_id = get_link().post_types['Themes']['id']
-    lookup_qs = dict(form=[ form_id ], values={ "theme-id": event_id }, limit=1, offset=0, status="all")
+    lookup_qs = dict(form=[ form_id ], values={ "theme-id": _id }, limit=1, offset=0, status="all")
     lookup_res = yield get_link().do_request("/api/v3/posts", qs=lookup_qs, method='GET')
     if 'results' not in lookup_res or len(lookup_res['results']) == 0:
       raise gen.Return(None)
     else:
       post = lookup_res['results'][0]
       story = Story(
-        event_id= post["values"]["theme-id"][0],
+        event_id= post["values"]["theme-event-id"][0],
         channel_id= post["values"]["theme-channel-id"][0],
-        size= post["values"]["theme-size"][0],
+        size= int(post["values"]["theme-size"][0]),
         start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
         last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
         featured_tweet= loads(post["values"]["theme-featured-tweet"][0]),
@@ -189,19 +190,22 @@ class Story(model.Story):
       logging.info("Refusing to save story without event_id")
       return
     # save / update based on story/event id
-    existing_story = yield Story.find_by_id(self.event_id)
+    existing_story = yield Story.find_by_id(self._id)
     if not existing_story:
       # create new one
       yield self._create()
-    else:
+    elif int(existing_story.size) != int(self.size):
       # update existing one
       logging.error("ACHTUNG!: not supporting updating v3 (yet)")
+    else:
+      logging.info("Not updating story because it hasn't changed in size")
 
   def _fill_v3_obj(self, post):
     # Fills v3 object with values from this object
     if "values" not in post: post["values"] = {}
-    post["values"]["theme-id"] = [ int(self.event_id) ]
+    post["values"]["theme-id"] = [ self._id ]
     post["values"]["theme-channel-id"] = [ self.channel_id ]
+    post["values"]["theme-event-id"] = [ self.event_id ]
     post["values"]["theme-size"] = [ self.size ]
     post["values"]["theme-start-date"] = [ datetime_to_string(self.start_date) ]
     post["values"]["theme-last-activity" ] = [ datetime_to_string(self.last_activity) ]
@@ -213,9 +217,9 @@ class Story(model.Story):
     post["values"]["theme-verified-count"] = [ self.verified_count ]
     # Add some other derived metadata if not present
     if "created" not in post: post["created"] = datetime_to_timestamp(self.start_date)
-    if "title" not in post: post["title"] = "ID %s" % str(self.event_id)
-    if "content" not in post: post["content"] = "Theme ID %s" % str(self.event_id)
-    if "slug" not in post: post["slug"] = "theme-id-%s" % str(self.event_id)
+    if "title" not in post: post["title"] = "ID %s" % str(self._id)
+    if "content" not in post: post["content"] = "Theme ID %s" % str(self._id)
+    if "slug" not in post: post["slug"] = "theme-id-%s-%s" % (str(self.channel_id), str(self.event_id))
     # Check it's added to the relevant category (aka event, aka channel)
     category_id = get_link().events[self.channel_id].category_id
     if category_id not in post["tags"]:

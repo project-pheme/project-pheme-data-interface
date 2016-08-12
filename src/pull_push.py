@@ -11,7 +11,7 @@ import state
 
 # Pull Themes (aka Stories) from GraphDB
 class PullThemesGraphDb(object):
-  def __init__(self, channel, chunk_size=100):
+  def __init__(self, channel, chunk_size=10):
     self.channel = channel
     self.chunk_size = chunk_size
     self.last_date = None
@@ -21,7 +21,8 @@ class PullThemesGraphDb(object):
 
   @gen.coroutine
   def _get_last_update(self):
-    yield state.get("pull_themes_graphdb_channel_%s.last_update" % self.channel._id)
+    v = yield state.get("pull_themes_graphdb_channel_%s.last_update" % self.channel._id)
+    raise gen.Return(v)
 
   @gen.coroutine
   def pull(self):   # pull chunk
@@ -29,7 +30,7 @@ class PullThemesGraphDb(object):
     if self.last_date is None:
       self.last_date = yield self._get_last_update()
     #
-    stories = yield graphdb.Story.fetch_updated_since(self.channel, since=self.last_date, limit=10)
+    stories = yield graphdb.Story.fetch_updated_since(self.channel, since=self.last_date, limit=self.chunk_size)
     raise gen.Return(stories)
 
   def set_consumed(self, chunk):
@@ -40,12 +41,20 @@ class PullThemesGraphDb(object):
 
 # Push Themes (aka Stories) to ushahidi v3
 class PushThemesUshV3(object):
+  def __init__(self, min_cluster_size=2):
+    self.min_cluster_size = min_cluster_size
   @gen.coroutine
   def push(self, chunk):    # push chunk
     for story in chunk:
       # Convert data model to V3 and save
       # Fetch additional details
       xmeta = yield story.get_extended_metadata()
+
+      # Skip clusters that are too small
+      if xmeta['size'] < self.min_cluster_size:
+        logger.info("Skipping story %s because it's too small (size=%d)" % (story._id, xmeta['size']))
+        continue
+
       featured_tweet = yield story.get_featured_tweet()
       controversiality = yield story.get_controversiality_score()
       v3_story = ush_v3.Story.as_copy(story,
@@ -56,7 +65,8 @@ class PushThemesUshV3(object):
         verified_count = xmeta['verified_count'],
         featured_tweet= featured_tweet,
         controversiality= controversiality)
-      v3_story.update_calculated()
+      v3_story.update_calculated()      
+
       yield v3_story.save()
 
 
@@ -80,14 +90,17 @@ class PullPushTask(FuzzyRecurrentTask):
 
 
 def create_themes_pull_task(channel, **kwargs):
+  logger.info("Creating task on channel %s with args %s" % (channel, str(kwargs)))
+
   task_id = "themes_pull_task_%s" % channel._id
   period = kwargs['period'] if 'period' in kwargs else 60
-  chunk_size = kwargs['chunk_size'] if 'chunk_size' in kwargs else 100
+  chunk_size = kwargs['chunk_size'] if 'chunk_size' in kwargs else 10
   first_delay = kwargs['first_delay'] if 'first_delay' in kwargs else (0, 15)
+  min_cluster_size = kwargs['min_cluster_size'] if 'min_cluster_size' in kwargs else 4
 
-  pull = PullThemesGraphDb(channel)
-  push = PushThemesUshV3()
-  task = PullPushTask(pull, push, task_id=task_id, period=period, chunk_size=chunk_size, first_delay=first_delay)
+  pull = PullThemesGraphDb(channel, chunk_size=chunk_size)
+  push = PushThemesUshV3(min_cluster_size=min_cluster_size)
+  task = PullPushTask(pull, push, task_id=task_id, period=period, first_delay=first_delay)
 
   return task
 

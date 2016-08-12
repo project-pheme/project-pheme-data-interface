@@ -33,9 +33,13 @@ class Channel(BaseModel):
 
 
 class Story(BaseModel):
-  __slots__ = [ 'channel_id', 'event_id', 'size',
+  __slots__ = [ '_id', 'channel_id', 'event_id', 'size',
     'start_date', 'last_activity', 'average_activity', 
     'controversiality', 'pub_count', 'img_count', 'verified_count' ]
+
+  @staticmethod
+  def idgen(channel_id, event_id):
+    return "%s@%s" % (event_id, channel_id)
 
   def __init__(self, **kwargs):
     super(Story, self).__init__(**kwargs)
@@ -43,6 +47,9 @@ class Story(BaseModel):
 
   def update_calculated(self):
     # Initialize calculated properties
+    if (hasattr(self, 'channel_id') and self.channel_id is not None) and \
+       (hasattr(self, 'event_id') and self.event_id is not None):
+      object.__setattr__(self, '_id', self.idgen(self.channel_id, self.event_id))
     if (hasattr(self, 'size') and self.size is not None) and \
        (hasattr(self, 'start_date') and self.start_date is not None) and \
        (hasattr(self, 'last_activity') and self.last_activity is not None):

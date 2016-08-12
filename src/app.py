@@ -5,7 +5,7 @@ from tornado_json.application import Application
 from tornado.ioloop import IOLoop
 from tornado.options import parse_command_line
 from datetime import datetime
-import json, signal, os
+import json, signal, os, os.path
 import logging
 
 from model import *
@@ -18,6 +18,11 @@ logger = logging.getLogger('tornado.general')
 
 theme_pull_period = os.environ["THEME_PULL_PERIOD"] if "THEME_PULL_PERIOD" in os.environ else "300"
 theme_pull_period = int(theme_pull_period)
+
+theme_pull_chunk_size = os.environ["THEME_PULL_CHUNK_SIZE"] if "THEME_PULL_CHUNK_SIZE" in os.environ else "10"
+theme_pull_chunk_size = int(theme_pull_chunk_size)
+
+state_dir_path = os.environ["STATE_DIR_PATH"] if "STATE_DIR_PATH" in os.environ else "."
 
 def make_app():
   import api
@@ -32,7 +37,7 @@ def make_app():
 @gen.coroutine
 def initialise_tasks():
   # Initialise state storage (state.db)
-  state.init('state')
+  state.init(os.path.join(state_dir_path, 'state'))
 
   # Ush V3 link initialisation
   yield ush_v3.get_link().initialise_tasks()
@@ -40,7 +45,9 @@ def initialise_tasks():
   # Initialise pull/push routine for each of the events/channels
   for (event_id, event) in ush_v3.get_link().events.iteritems():
     logger.info("Starting pull/push routine for event=%s (%s)" % (event_id, event.display_name))
-    t = pull_push.create_themes_pull_task(event, period=theme_pull_period, first_delay=(0,15))
+    t = pull_push.create_themes_pull_task(event,
+      chunk_size=theme_pull_chunk_size,
+      period=theme_pull_period, first_delay=(0,15))
     register_task(t, start=True)
 
 def on_shutdown():
