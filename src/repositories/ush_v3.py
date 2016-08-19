@@ -147,31 +147,31 @@ class Story(model.Story):
     if 'errors' in post:
       raise gen.Return(None)
     else:
-      story = Story(
-        event_id= post["values"]["theme-event-id"][0],
-        channel_id= post["values"]["theme-channel-id"][0],
-        size= post["values"]["theme-size"][0],
-        start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
-        last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
-        featured_tweet= loads(post["values"]["theme-featured-tweet"][0]),
-        controversiality = float(post["values"]["theme-controversiality"][0]),
-        img_count = post["values"]["theme-img-count"][0],
-        pub_count = post["values"]["theme-pub-count"][0],
-        verified_count = post["values"]["theme-verified-count"][0]
-        )
-      raise gen.Return(story)
+      raise gen.Return(self._from_post(post))
 
   @staticmethod
   @gen.coroutine
   def find_by_id(_id):
+    post = yield self._find_post_by_theme_id(_id)
+    if post is None:
+      raise gen.Return(None)
+    else:
+      raise gen.Return(Story._from_post(post))
+
+  @staticmethod
+  @gen.coroutine
+  def _find_post_by_theme_id(theme_id):
     form_id = get_link().post_types['Themes']['id']
-    lookup_qs = dict(form=[ form_id ], values={ "theme-id": _id }, limit=1, offset=0, status="all")
+    lookup_qs = dict(form=[ form_id ], values={ "theme-id": theme_id }, limit=1, offset=0, status="all")
     lookup_res = yield get_link().do_request("/api/v3/posts", qs=lookup_qs, method='GET')
     if 'results' not in lookup_res or len(lookup_res['results']) == 0:
       raise gen.Return(None)
     else:
-      post = lookup_res['results'][0]
-      story = Story(
+      raise gen.Return(lookup_res['results'][0])
+
+  @staticmethod
+  def _from_post(post):
+    return Story(
         event_id= post["values"]["theme-event-id"][0],
         channel_id= post["values"]["theme-channel-id"][0],
         size= int(post["values"]["theme-size"][0]),
@@ -183,7 +183,6 @@ class Story(model.Story):
         pub_count = post["values"]["theme-pub-count"][0],
         verified_count = post["values"]["theme-verified-count"][0]
         )
-      raise gen.Return(story)
 
   @gen.coroutine
   def save(self):
@@ -191,15 +190,17 @@ class Story(model.Story):
       logging.info("Refusing to save story without event_id")
       return
     # save / update based on story/event id
-    existing_story = yield Story.find_by_id(self._id)
-    if not existing_story:
+    existing_post = yield Story._find_post_by_theme_id(self._id)
+    if not existing_post:
       # create new one
       yield self._create()
-    elif int(existing_story.size) != int(self.size):
-      # update existing one
-      logging.error("ACHTUNG!: not supporting updating v3 (yet)")
     else:
-      logging.info("Not updating story because it hasn't changed in size")
+      existing_story = Story._from_post(existing_post)
+      if int(existing_story.size) != int(self.size):
+        # update existing one
+        yield self._update(existing_post)
+      else:
+        logging.info("Not updating story because it hasn't changed in size")
 
   def _fill_v3_obj(self, post):
     # Fills v3 object with values from this object
@@ -226,8 +227,7 @@ class Story(model.Story):
     if category_id not in post["tags"]:
       post["tags"].append(category_id)
 
-  @gen.coroutine
-  def _create(self):
+  def _create_v3_obj(self):
     form = get_link().post_types['Themes']
     post_json = loads("""{
       "locale": "en_US",
@@ -241,13 +241,30 @@ class Story(model.Story):
     }""")
     post_json["form"] = form
     self._fill_v3_obj(post_json)
-    #
+    return post_json
+
+  @gen.coroutine
+  def _create(self):
+    post_json = self._create_v3_obj()
     logger.info("Creating the following post: " + dumps(post_json))
     response = yield get_link().do_request(
       "/api/v3/posts",
       method='POST',
       body=dumps(post_json),
     )
+
+  @gen.coroutine
+  def _update(self, existing_post):
+    from copy import copy
+    post_json = copy(existing_post)
+    self._fill_v3_obj(post_json)
+    logger.info("Updating post with id: %d" % existing_post["id"])
+    response = yield get_link().do_request(
+      "/api/v3/posts/%d" % existing_post["id"],
+      method='PUT',
+      body=dumps(post_json),
+    )
+
 
 class TokenRefreshTask(SelfRegulatingTask):
   def __init__(self, expires_in):
