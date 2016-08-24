@@ -53,11 +53,11 @@ class Story(BaseModel):
     if (hasattr(self, 'size') and self.size is not None) and \
        (hasattr(self, 'start_date') and self.start_date is not None) and \
        (hasattr(self, 'last_activity') and self.last_activity is not None):
-      duration = (self.last_activity - self.start_date).total_seconds() / 3600.0
+      duration = (self.last_activity - self.start_date).total_seconds()
       if duration == 0:
         avg = self.size
       else:
-        avg = self.size / ((self.last_activity - self.start_date).total_seconds() / 3600.0)
+        avg = self.size / (duration / 60.0)
       object.__setattr__(self, 'average_activity', avg)
 
 
