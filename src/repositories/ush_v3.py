@@ -147,7 +147,7 @@ class Story(model.Story):
     if 'errors' in post:
       raise gen.Return(None)
     else:
-      raise gen.Return(self._from_post(post))
+      raise gen.Return(Story._from_post(post))
 
   @staticmethod
   @gen.coroutine
@@ -162,7 +162,7 @@ class Story(model.Story):
   @gen.coroutine
   def _find_post_by_theme_id(theme_id):
     form_id = get_link().post_types['Themes']['id']
-    lookup_qs = dict(form=[ form_id ], values={ "theme-id": theme_id }, limit=1, offset=0, status="all")
+    lookup_qs = dict(form=[ form_id ], values={ "theme-id": dumps(dict(op='=', term=theme_id)) }, limit=1, offset=0, status="all")
     lookup_res = yield get_link().do_request("/api/v3/posts", qs=lookup_qs, method='GET')
     if 'results' not in lookup_res or len(lookup_res['results']) == 0:
       raise gen.Return(None)
@@ -351,7 +351,10 @@ class UshahidiV3Link(object):
       kwargs['headers']['Accept'] = 'application/json'
       kwargs['headers']['Authorization'] = 'Bearer %s' % self.access_token
 
-      r = HTTPRequest(USH_BASEURL + endpoint + query_string, **kwargs)
+      url = USH_BASEURL + endpoint + query_string
+      logger.info("[ush_v3] sending %s to %s" % (kwargs['method'], url))
+      
+      r = HTTPRequest(url, **kwargs)
       http_client = AsyncHTTPClient()
       response = yield http_client.fetch(r)
       if response.error:
