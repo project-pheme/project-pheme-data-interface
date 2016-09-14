@@ -42,7 +42,7 @@ def query(query):
       'Content-Type': 'application/x-www-form-urlencoded'
       },
     body=urllib.urlencode({ 'query': query }),
-    request_timeout=15.0
+    request_timeout=300
     )
   http_client = AsyncHTTPClient()
   response = yield http_client.fetch(r)
@@ -133,7 +133,7 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
-      select ?thread ?source ?text ?userName ?userHandle ?date (count(?a) as ?countReplies) ?avatar where {   
+      select ?thread ?source ?text ?userName ?userHandle ?verified ?date (count(?a) as ?countReplies) ?avatar where {   
         ?a a pheme:ReplyingTweet .
         ?source a pheme:SourceTweet.
         ?source sioc:has_container ?thread.
@@ -141,13 +141,15 @@ class Story(model.Story):   # aka Theme / Pheme
         ?creator foaf:name ?userName.
         ?creator foaf:accountName ?userHandle.
         OPTIONAL { ?creator foaf:depiction ?avatar. }
+        ?creator pheme:twitterFollowersCount ?numberOfFollowers .
+        ?creator pheme:twitterUserVerified ?verified .
         ?source pheme:createdAt ?date.
         ?source dlpo:textualContent ?text.
         ?a sioc:has_container ?thread.
         ?a pheme:eventId "$event_id".
         ?a pheme:dataChannel "$data_channel_id".
         ?a pheme:version "$pheme_version".
-      } GROUP BY ?thread ?source ?text ?userName ?userHandle ?date ?avatar
+      } GROUP BY ?thread ?source ?text ?userName ?userHandle ?verified ?date ?avatar
       order by desc(?countReplies)
       limit 1
     """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
@@ -168,7 +170,8 @@ class Story(model.Story):   # aka Theme / Pheme
         user= dict(
           profile_image_url = _avatar_process(x['avatar']),
           user_description= x['userName'],
-          user_screen_name= x['userHandle'])
+          user_screen_name= x['userHandle']),
+          is_verified = (x['verified'].capitalize() == 'True')
         ))
 
   @gen.coroutine
@@ -219,12 +222,26 @@ class Story(model.Story):   # aka Theme / Pheme
     """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
 
-    raise gen.Return(map(lambda x: dict(
+    articles = map(lambda x: dict(
                           date= iso8601.parse_date(x['date'].decode()),
                           text= unicode(x['text']),
                           thread= x['thread'].decode(),
                           url= x['URL'].decode()),
-                         result))
+                         result)
+
+    from url_utils import get_canonical_url
+    from urlparse import urlparse
+    for art in articles:
+      canonical_url = yield get_canonical_url(art['url'])
+      canonical_url_p = urlparse(canonical_url)
+      art['canonicalUrl'] = {
+        "url": canonical_url,
+        "scheme": canonical_url_p.scheme,
+        "netloc": canonical_url_p.netloc,
+        "path": canonical_url_p.path
+      }
+
+    raise gen.Return(articles)
 
   @gen.coroutine
   def _get_featured_tweet_alt(self):
@@ -236,7 +253,7 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      select ?a ?text ?date ?userName ?userHandle ?avatar
+      select ?a ?text ?date ?userName ?userHandle ?avatar ?verified
       where {
         ?a pheme:eventId "$event_id".
         ?a pheme:dataChannel "$data_channel_id".
@@ -246,9 +263,11 @@ class Story(model.Story):   # aka Theme / Pheme
         ?u foaf:name ?userName.
         ?u foaf:accountName ?userHandle.
         OPTIONAL { ?u foaf:depiction ?avatar. }
+        ?u pheme:twitterFollowersCount ?numberOfFollowers .
+        ?u pheme:twitterUserVerified ?verified .
         ?a pheme:version "$pheme_version".
       }
-      order by ?date
+      order by DESC(?verified) DESC(?numberOfFollowers) ?date
       limit 1
     """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
@@ -310,23 +329,93 @@ _lipsum = [
   "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti" ]
 
 class Thread(model.Thread):
+  # @staticmethod
+  # @gen.coroutine
+  # def fetch_from_story(story):
+  #   ### TODO: just sample data by now ###
+  #   from random import randint, sample
+  #   from datetime import datetime, timedelta
+  #   from pytz import UTC
+  #   results = []
+  #   for x in range(0, randint(3,10)):
+  #     featured_tweet = dict(
+  #       text= sample(_lipsum, 1)[0],
+  #       date= datetime(2016,1,1,tzinfo=pytz.UTC) + timedelta(seconds=randint(0,(365*24*3600)/2)),
+  #       user= dict(
+  #         profile_image_url = 'https://lh6.ggpht.com/Gg2BA4RXi96iE6Zi_hJdloQAZxO6lC6Drpdr7ouKAdCbEcE_Px-1o4r8bg8ku_xzyF4y=h900',
+  #         user_description= 'Twitter User',
+  #         user_screen_name= 'twitteruser')
+  #       )
+  #     t = Thread(uri= "random%d" % x, featured_tweet=featured_tweet)
+  #     results.append(t)
+  #   raise gen.Return(results)
+
   @staticmethod
   @gen.coroutine
   def fetch_from_story(story):
-    ### TODO: just sample data by now ###
-    from random import randint, sample
-    from datetime import datetime, timedelta
-    from pytz import UTC
+    q = Template("""
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo#>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+      select *
+        {
+          {
+          select ?thread (min(?date) as ?first) (sum(xsd:integer(xsd:boolean(?verified))) as ?countVerifiedUsers)
+            {
+            ?tweet a pheme:Tweet .
+            ?tweet pheme:version "$pheme_version" .
+            ?tweet sioc:has_container ?thread .
+            ?tweet pheme:dataChannel "$data_channel_id" .
+            ?tweet pheme:createdAt ?date .
+            ?tweet sioc:has_creator ?user .
+            ?user pheme:twitterUserVerified ?verified .
+            ?tweet pheme:eventId "$event_id" 
+            } group by ?thread 
+          }
+        ?tweet sioc:has_container ?thread .
+        ?tweet pheme:createdAt ?first .
+        ?tweet dlpo:textualContent ?text .
+        ?tweet sioc:has_creator ?user .
+        ?user foaf:accountName ?accountName .
+        ?user foaf:name ?userName .
+        ?user pheme:twitterFollowersCount ?numberOfFollowers .
+        ?user pheme:twitterStatusesCount ?numberOfPosts .
+        OPTIONAL { ?user foaf:depiction ?avatar . }
+        ?user pheme:twitterUserVerified ?verified .
+        }
+        order by DESC(?verified) DESC(?numberOfFollowers)
+        limit 100
+    """).substitute(event_id=story['event_id'], data_channel_id=story['channel_id'], pheme_version=GRAPHDB_PHEME_VERSION)
+    result = yield query(q)
+
     results = []
-    for x in range(0, randint(3,10)):
+    for x in result:
       featured_tweet = dict(
-        text= sample(_lipsum, 1)[0],
-        date= datetime(2016,1,1,tzinfo=pytz.UTC) + timedelta(seconds=randint(0,(365*24*3600)/2)),
+        text= unicode(x['text']),
+        date= iso8601.parse_date(x['first'].decode()),
         user= dict(
-          profile_image_url = 'https://lh6.ggpht.com/Gg2BA4RXi96iE6Zi_hJdloQAZxO6lC6Drpdr7ouKAdCbEcE_Px-1o4r8bg8ku_xzyF4y=h900',
-          user_description= 'Twitter User',
-          user_screen_name= 'twitteruser')
+          profile_image_url = x['avatar'],
+          user_description = x['userName'],
+          user_screen_name = x['accountName'],
+          is_verified = (x['verified'].capitalize() == 'True')
+          )
         )
-      t = Thread(uri= "random%d" % x, featured_tweet=featured_tweet)
+      #
+      tweet_id = re.match(r'.*\D(\d+)$', x['thread'].decode())
+      if tweet_id is None:
+        raise Execption("Unparseable tweet_id from result %s" % str(x))
+      else:
+        tweet_id = tweet_id.groups()[0]
+      uri = Template("https://twitter.com/$user_screen_name/status/$tweet_id").substitute(
+        user_screen_name= x['accountName'],
+        tweet_id= tweet_id
+        )
+      #
+      t = Thread(uri= uri, featured_tweet= featured_tweet)
       results.append(t)
+      
     raise gen.Return(results)
+
