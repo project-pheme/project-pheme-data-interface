@@ -5,6 +5,7 @@ from tornado import gen
 
 import logging, os
 from json import loads, dumps
+from urllib import urlencode
 
 
 capture_proto = os.environ["CAPTURE_PROTO"] if 'CAPTURE_PROTO' in os.environ else "http"
@@ -50,6 +51,17 @@ def create_data_channel(spec):
   result = yield _do_request("/datachannel", method="POST", body=dumps(spec))
   raise gen.Return(result)
 
+
+@gen.coroutine
+def live_search(keywords, max_results=100):
+  params = {
+    "mode": "live",
+    "max_results": max_results,
+    "keywords": ' '.join(keywords)
+  }
+  result = yield _do_request("/search/tweets?%s" % urlencode(params), method="GET")
+  raise gen.Return(result)
+
 @gen.coroutine
 def _do_request(endpoint, **kwargs):
   if not 'headers' in kwargs:
@@ -67,3 +79,4 @@ def _do_request(endpoint, **kwargs):
     raise gen.Return({})
   else:
     raise gen.Return(loads(response.body)) 
+
