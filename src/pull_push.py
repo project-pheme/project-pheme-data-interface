@@ -121,7 +121,7 @@ def create_themes_pull_task(channel, **kwargs):
   period = kwargs['period'] if 'period' in kwargs else 60
   chunk_size = kwargs['chunk_size'] if 'chunk_size' in kwargs else 10
   first_delay = kwargs['first_delay'] if 'first_delay' in kwargs else (0, 15)
-  min_cluster_size = kwargs['min_cluster_size'] if 'min_cluster_size' in kwargs else 4
+  min_cluster_size = kwargs['min_cluster_size'] if 'min_cluster_size' in kwargs else 2
 
   pull = PullThemesGraphDb(channel, chunk_size=chunk_size)
   push = PushThemesUshV3(min_cluster_size=min_cluster_size)

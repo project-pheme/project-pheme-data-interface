@@ -94,12 +94,12 @@ class EventScopeHandler(ModelAPIHandler):
     """
     # If startCaptureDate or endCaptureDate are not specified, come up with values for them
     if "startCaptureDate" not in self.body:
-      # defaults to 1 week ago
+      # defaults to 1 day ago
       self.body["startCaptureDate"] = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S.000")
     #
     if "endCaptureDate" not in self.body:
-      # defaults to 1 rotation around the sun from now
-      self.body["endCaptureDate"] = (datetime.now() + timedelta(days=365, hours=5, minutes=48, seconds=46)).strftime("%Y-%m-%d %H:%M:%S.000")
+      # defaults to 5 days from now
+      self.body["endCaptureDate"] = (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S.000")
     #
     for ds in self.body["dataSources"]:
       if not "chronologicalOrder" in ds["twitter"]:

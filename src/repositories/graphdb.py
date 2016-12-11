@@ -13,9 +13,11 @@ import iso8601
 
 GRAPHDB_ENDPOINT = os.environ["GRAPHDB_ENDPOINT"] if "GRAPHDB_ENDPOINT" in os.environ else 'http://pheme.ontotext.com/graphdb/repositories/pheme'
 
-GRAPHDB_PHEME_VERSION="v7"
+GRAPHDB_PHEME_VERSIONS=[ "v8" ]
 
 logger = logging.getLogger('tornado.general')
+
+_graphdb_pheme_versions = "(%s)" % ",".join(map(lambda v: "\"%s\"" % v, GRAPHDB_PHEME_VERSIONS))
 
 def datetime_to_iso(dt, default=0):
   if dt is None:
@@ -68,16 +70,18 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a pheme:eventId ?eventId.
           FILTER (xsd:integer(?eventId) > -1).
           ?a pheme:dataChannel "$data_channel_id".
-          ?a pheme:version "$pheme_version".
+          ?a pheme:version ?pheme_version.
+          FILTER ( ?pheme_version IN $pheme_versions ).
       } GROUP BY (?eventId)
       ORDER BY ?lastUpdate
       LIMIT $limit
     """).substitute(
       data_channel_id=channel._id,
       since_date=datetime_to_iso(since),
-      pheme_version=GRAPHDB_PHEME_VERSION,
+      pheme_versions=_graphdb_pheme_versions,
       limit=limit)
     result = yield query(q)
+    result = filter(lambda x: x['eventId'] is not None, result)
     stories = map(lambda x:
                    Story(channel_id=channel._id,
                          event_id=x['eventId'].decode(),
@@ -101,14 +105,15 @@ class Story(model.Story):   # aka Theme / Pheme
         ?a a pheme:Tweet .
         ?a pheme:createdAt ?date.        
         ?a pheme:eventId "$event_id" .
-        ?a pheme:version "$pheme_version" .
+        ?a pheme:version ?pheme_version.
+        FILTER ( ?pheme_version IN $pheme_versions ).
         ?a pheme:dataChannel "$data_channel_id".
         OPTIONAL {?a pheme:hasEvidentialityPicture ?imageURL} .
         OPTIONAL {?a pheme:hasEvidentialityUrl ?URL} .
         ?a sioc:has_creator ?user .
         ?user pheme:twitterUserVerified ?verified .  
       }
-    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
     result = yield query(q)
     assert len(result) == 1
 
@@ -148,11 +153,12 @@ class Story(model.Story):   # aka Theme / Pheme
         ?a sioc:has_container ?thread.
         ?a pheme:eventId "$event_id".
         ?a pheme:dataChannel "$data_channel_id".
-        ?a pheme:version "$pheme_version".
+        ?a pheme:version ?pheme_version.
+        FILTER ( ?pheme_version IN $pheme_versions ).
       } GROUP BY ?thread ?source ?text ?userName ?userHandle ?verified ?date ?avatar
       order by desc(?countReplies)
       limit 1
-    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
     result = yield query(q)
     assert len(result) == 1   # Because of grouping, there must always be a result row
 
@@ -189,10 +195,11 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a pheme:hasEvidentialityPicture ?imageURL .
           ?a pheme:eventId "$event_id".
           ?a pheme:dataChannel "$data_channel_id".
-          ?a pheme:version "$pheme_version"
+          ?a pheme:version ?pheme_version.
+          FILTER ( ?pheme_version IN $pheme_versions ).
       } group by ?imageURL
       having (?countImage > 0)
-    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
     result = yield query(q)
 
     raise gen.Return(map(lambda x: dict(
@@ -217,7 +224,8 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a dlpo:textualContent ?text.
           ?a pheme:eventId "$event_id".
           ?a pheme:dataChannel "$data_channel_id".
-          ?a pheme:version "v7"
+          ?a pheme:version ?pheme_version.
+          FILTER ( ?pheme_version IN $pheme_versions ).
       } order by desc(?date)
     """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
     result = yield query(q)
@@ -265,11 +273,12 @@ class Story(model.Story):   # aka Theme / Pheme
         OPTIONAL { ?u foaf:depiction ?avatar. }
         ?u pheme:twitterFollowersCount ?numberOfFollowers .
         ?u pheme:twitterUserVerified ?verified .
-        ?a pheme:version "$pheme_version".
+        ?a pheme:version ?pheme_version.
+        FILTER ( ?pheme_version IN $pheme_versions ).
       }
       order by DESC(?verified) DESC(?numberOfFollowers) ?date
       limit 1
-    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
     result = yield query(q)
     if len(result) == 1:
       tweet = iter(result).next()
@@ -287,9 +296,10 @@ class Story(model.Story):   # aka Theme / Pheme
         ?a pheme:eventId "$event_id".
         ?a pheme:dataChannel "$data_channel_id".
         ?a pheme:sdq ?sdq_type .
-        ?a pheme:version "$pheme_version" .
+        ?a pheme:version ?pheme_version.
+        FILTER ( ?pheme_version IN $pheme_versions ).
       } group by ?sdq_type
-    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
     result = yield query(q)
 
     # v will hold the count for each sdq_type
@@ -366,7 +376,8 @@ class Thread(model.Thread):
           select ?thread (min(?date) as ?first) (sum(xsd:integer(xsd:boolean(?verified))) as ?countVerifiedUsers)
             {
             ?tweet a pheme:Tweet .
-            ?tweet pheme:version "$pheme_version" .
+            ?tweet pheme:version ?pheme_version.
+            FILTER ( ?pheme_version IN $pheme_versions ).
             ?tweet sioc:has_container ?thread .
             ?tweet pheme:dataChannel "$data_channel_id" .
             ?tweet pheme:createdAt ?date .
@@ -388,7 +399,7 @@ class Thread(model.Thread):
         }
         order by DESC(?verified) DESC(?numberOfFollowers)
         limit 100
-    """).substitute(event_id=story['event_id'], data_channel_id=story['channel_id'], pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=story['event_id'], data_channel_id=story['channel_id'], pheme_versions=_graphdb_pheme_versions)
     result = yield query(q)
 
     results = []
