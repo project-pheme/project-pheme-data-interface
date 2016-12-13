@@ -4,7 +4,7 @@ from my_json import loads, dumps
 from string import Template
 from copy import copy
 
-import logging, time, re, urllib, pytz, os
+import logging, time, re, urllib, pytz, os, iso8601
 from datetime import datetime
 
 import model
@@ -56,6 +56,9 @@ def get_link():
 def datetime_to_timestamp(dt):
   return int(time.mktime(dt.utctimetuple()))
 
+def timestamp_to_datetime(ts):
+  return datetime.fromtimestamp(float(ts)).replace(tzinfo=pytz.UTC)
+
 def datetime_to_string(dt):
   return dt.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -73,13 +76,16 @@ class Channel(model.Channel):
 
   @staticmethod
   def create_from_v3_tag(tag):
-    n = Channel(_id=Channel.decode_slug(tag["slug"]), display_name=tag["tag"], description=tag["description"])
+    logger.info("-- create_from_v3_tag: %s" % str(tag))
+    n = Channel(_id=Channel.decode_slug(tag["slug"]), display_name=tag["tag"], description=tag["description"], updated=iso8601.parse_date(tag["updated"] or "1970-01-01T00:00Z"))
     n.set_category_id(tag["id"])
     return n
 
   @staticmethod
-  def create_from_datachannel(dc):
-    n = Channel(_id=dc["channelID"], display_name=dc["name"], description=dc["description"])
+  def create_from_datachannel(dc, updated=0):
+    if type(updated) == int:
+      updated = timestamp_to_datetime(updated)
+    n = Channel(_id=dc["channelID"], display_name=dc["name"], description=dc["description"], updated=updated)
     n.set_category_id(None)
     return n
 
@@ -115,10 +121,21 @@ class Channel(model.Channel):
       "tag": self.display_name,
       "description": self.description,
       "slug": self.encode_slug(),
-      "icon": "tag"
+      "icon": "tag",
+      "updated": datetime_to_timestamp(self.updated)
     }
     tag = yield get_link().do_request("/api/v3/tags", method='POST', body=dumps(tag_json))
     self.set_category_id(tag["id"])
+
+  @gen.coroutine
+  def update_timestamp(self, update_dt):
+    logger.info("Comparing %s (self.updated) with %s (update_dt)" % (str(self.updated), str(update_dt)))
+    if update_dt > self.updated:
+      object.__setattr__(self, 'updated', update_dt) # self.updated = update_dt
+      tag_json = {
+        "updated": datetime_to_timestamp(self.updated)
+      }
+      yield get_link().do_request("/api/v3/tags/%s" % str(self.category_id), method='PUT', body=dumps(tag_json))
 
   def obj(self):
     obj = super(Channel, self).obj()
@@ -201,6 +218,8 @@ class Story(model.Story):
         yield self._update(existing_post)
       else:
         logging.info("Not updating story because it hasn't changed in size")
+    # in any case update the last received message for the category (aka event / topic)
+    get_link().events[self.channel_id].update_timestamp(self.last_activity)
 
   def _fill_v3_obj(self, post):
     # Fills v3 object with values from this object

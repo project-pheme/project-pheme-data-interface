@@ -33,6 +33,9 @@ def _avatar_process(url):
     # default avatar (egg)
     return "https://abs.twimg.com/sticky/default_profile_images/default_profile_2_bigger.png"
 
+def _str_to_bool(str):
+  return (str or "").lower() in [ 'true', '1' ]
+
 @gen.coroutine
 def query(query):
   logger.info("Sending query:\n%s" % query)
@@ -58,7 +61,7 @@ import model
 class Story(model.Story):   # aka Theme / Pheme
   @staticmethod
   @gen.coroutine
-  def fetch_updated_since(channel, since=None, limit=100):
+  def fetch_updated_since(channel, since=None, limit=100, order="ASC"):
     # Query graphdb for latest events belonging to the given channel
     q = Template("""
       PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
@@ -73,12 +76,13 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a pheme:version ?pheme_version.
           FILTER ( ?pheme_version IN $pheme_versions ).
       } GROUP BY (?eventId)
-      ORDER BY ?lastUpdate
+      ORDER BY $order(?lastUpdate)
       LIMIT $limit
     """).substitute(
       data_channel_id=channel._id,
       since_date=datetime_to_iso(since),
       pheme_versions=_graphdb_pheme_versions,
+      order=order,
       limit=limit)
     result = yield query(q)
     result = filter(lambda x: x['eventId'] is not None, result)
@@ -227,7 +231,7 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a pheme:version ?pheme_version.
           FILTER ( ?pheme_version IN $pheme_versions ).
       } order by desc(?date)
-    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_version=GRAPHDB_PHEME_VERSION)
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
     result = yield query(q)
 
     articles = map(lambda x: dict(
@@ -383,13 +387,15 @@ class Thread(model.Thread):
             ?tweet pheme:createdAt ?date .
             ?tweet sioc:has_creator ?user .
             ?user pheme:twitterUserVerified ?verified .
-            ?tweet pheme:eventId "$event_id" 
+            ?tweet pheme:eventId "$event_id" .
             } group by ?thread 
           }
         ?tweet sioc:has_container ?thread .
         ?tweet pheme:createdAt ?first .
         ?tweet dlpo:textualContent ?text .
         ?tweet sioc:has_creator ?user .
+        OPTIONAL { ?tweet pheme:veracity ?veracity . }
+        OPTIONAL { ?tweet pheme:veracityScore ?veracity_score . }
         ?user foaf:accountName ?accountName .
         ?user foaf:name ?userName .
         ?user pheme:twitterFollowersCount ?numberOfFollowers .
@@ -407,6 +413,8 @@ class Thread(model.Thread):
       featured_tweet = dict(
         text= unicode(x['text']),
         date= iso8601.parse_date(x['first'].decode()),
+        veracity= _str_to_bool(x['veracity']),
+        veracity_score= x['veracity_score'] or 0.0,
         user= dict(
           profile_image_url = x['avatar'],
           user_description = x['userName'],

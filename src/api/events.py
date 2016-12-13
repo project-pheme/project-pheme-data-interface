@@ -15,6 +15,7 @@ logger = logging.getLogger('tornado.general')
 
 @tgen.coroutine
 def add_event_from_datachannel(channel):
+  ## Create the event
   event = ush_v3.Channel.create_from_datachannel(channel)
   yield ush_v3.get_link().add_event(event)
   logger.info("Starting pull/push routine for event=%s (%s)" % (event._id, event.display_name))

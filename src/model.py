@@ -29,7 +29,7 @@ class BaseModel(object):
 
 
 class Channel(BaseModel):
-  __slots__ = [ '_id', 'display_name', 'description' ]
+  __slots__ = [ '_id', 'display_name', 'description', 'updated' ]
 
 
 class Story(BaseModel):
@@ -70,7 +70,7 @@ class Thread(BaseModel):
 
 
 class Tweet(BaseModel):
-  __slots__ = [ 'uri', 'created_at', 'rumour_coefficient', 'textual_content', ]
+  __slots__ = [ 'uri', 'created_at', 'rumour_coefficient', 'textual_content', 'veracity', 'veracity_score' ]
 
 
 class User(BaseModel):
