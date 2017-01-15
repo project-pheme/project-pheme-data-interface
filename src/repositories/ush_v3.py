@@ -238,8 +238,8 @@ class Story(model.Story):
     post["values"]["theme-verified-count"] = [ self.verified_count ]
     # Add some other derived metadata if not present
     if "created" not in post: post["created"] = datetime_to_timestamp(self.start_date)
-    if "title" not in post: post["title"] = self.featured_tweet['text'] # "ID %s" % str(self._id)
-    if "content" not in post: post["content"] = self.featured_tweet['text'] #"Theme ID %s" % str(self._id)
+    if "title" not in post: post["title"] = self.title # "ID %s" % str(self._id)
+    if "content" not in post: post["content"] = self.title #"Theme ID %s" % str(self._id)
     if "slug" not in post: post["slug"] = "theme-id-%s-%s" % (str(self.channel_id), str(self.event_id))
     # Check it's added to the relevant category (aka event, aka channel)
     category_id = get_link().events[self.channel_id].category_id

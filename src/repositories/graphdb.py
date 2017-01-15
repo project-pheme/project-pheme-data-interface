@@ -65,7 +65,7 @@ class Story(model.Story):   # aka Theme / Pheme
     # Query graphdb for latest events belonging to the given channel
     q = Template("""
       PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
-      SELECT ?eventId
+      SELECT ?eventId ?phemeTitle
              (MAX(?date) AS ?lastUpdate)
       WHERE {   
           ?a pheme:createdAt ?date.
@@ -74,8 +74,9 @@ class Story(model.Story):   # aka Theme / Pheme
           FILTER (xsd:integer(?eventId) > -1).
           ?a pheme:dataChannel "$data_channel_id".
           ?a pheme:version ?pheme_version.
+          ?a pheme:eventClusterTitle ?phemeTitle.
           FILTER ( ?pheme_version IN $pheme_versions ).
-      } GROUP BY (?eventId)
+      } GROUP BY ?eventId ?phemeTitle
       ORDER BY $order(?lastUpdate)
       LIMIT $limit
     """).substitute(
@@ -89,7 +90,8 @@ class Story(model.Story):   # aka Theme / Pheme
     stories = map(lambda x:
                    Story(channel_id=channel._id,
                          event_id=x['eventId'].decode(),
-                         last_activity=iso8601.parse_date(x['lastUpdate'].decode())
+                         last_activity=iso8601.parse_date(x['lastUpdate'].decode()),
+                         title=x['phemeTitle'].decode(),
                          ), result)
     raise gen.Return(stories)
 
