@@ -12,7 +12,7 @@ class DataChannelsHandler(APIHandler):
   @gen.coroutine
   def get(self):
     results = yield capture_api.get_data_channels()
-    self.success(results)
+    self.success(results['dataChannel'])
 
 class DataChannelDetailHandler(APIHandler):
   __urls__ = [ '/api/datachannels/(?P<dc_id>[a-zA-Z0-9_\\-]+)' ]

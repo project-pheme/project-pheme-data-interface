@@ -37,13 +37,27 @@ class ModelAPIHandler(APIHandler):
 class EventScopeHandler(ModelAPIHandler):
   __urls__ = [ '/api/event' ]
 
+  @tgen.coroutine
   def get(self):
     """
     GET events defined in the ushahidi instance
     """
     events = ush_v3.get_link().events
-    # TODO filter against capture ?
-    self.success(events)
+    data_channels = yield capture_api.get_data_channels()
+    data_channels = dict(map(lambda ch: (ch['channelID'], ch), data_channels['dataChannel']))
+    # filter / add data channel information
+    def merge_event(event_id, event):
+      event = event.obj()
+      if data_channels.has_key(event_id):
+        dc = data_channels[event_id]
+        event['capture-status'] = dc['status']
+        event['capture-end-date'] = dc['endCaptureDate']
+      else:
+        event['capture-status'] = None
+        event['capture-end-date'] = None
+      return (event_id, event)
+    #
+    self.success(dict(map(lambda it: merge_event(*it), events.items())))
 
   @schema.validate(
     input_schema={
