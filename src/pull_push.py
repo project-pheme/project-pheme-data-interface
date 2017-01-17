@@ -78,6 +78,9 @@ class PushThemesUshV3(object):
       # The story may have evolved, fetch more details
       featured_tweet = yield story.get_featured_tweet()
       controversiality = yield story.get_controversiality_score()
+      images = yield story.get_linked_images()
+      images = sorted(images, lambda x,y: y['count'] - x['count'])
+      most_shared_img = images[0]['imgUrl'] if len(images) > 0 else ""
 
       # Create and save the story on the ush_v3 repository
       v3_story = ush_v3.Story.as_copy(story,
@@ -87,7 +90,8 @@ class PushThemesUshV3(object):
         pub_count= xmeta['pub_count'],
         verified_count = xmeta['verified_count'],
         featured_tweet= featured_tweet,
-        controversiality= controversiality)
+        controversiality= controversiality,
+        most_shared_img = most_shared_img)
 
       yield v3_story.save()
 

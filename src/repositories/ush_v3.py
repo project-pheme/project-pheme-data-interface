@@ -40,6 +40,7 @@ required_post_types = {
         { "label": "Publication count","type": "int",      "input": "number", "required": True, "key": "theme-pub-count" },
         { "label": "Image count",      "type": "int",      "input": "number", "required": True, "key": "theme-img-count" },
         { "label": "Verified count",   "type": "int",      "input": "number", "required": True, "key": "theme-verified-count" },
+        { "label": "Most shared image","type": "varchar",  "input": "text",   "required": True, "key": "theme-most-shared-img" },
       ]
     }]
   }
@@ -198,7 +199,8 @@ class Story(model.Story):
         controversiality = float(post["values"]["theme-controversiality"][0]),
         img_count = post["values"]["theme-img-count"][0],
         pub_count = post["values"]["theme-pub-count"][0],
-        verified_count = post["values"]["theme-verified-count"][0]
+        verified_count = post["values"]["theme-verified-count"][0],
+        most_shared_img = post["values"]["theme-most-shared-img"][0]
         )
 
   @gen.coroutine
@@ -236,6 +238,7 @@ class Story(model.Story):
     post["values"]["theme-img-count"] = [ self.img_count ]
     post["values"]["theme-pub-count"] = [ self.pub_count ]
     post["values"]["theme-verified-count"] = [ self.verified_count ]
+    post["values"]["theme-most-shared-img"] = [ self.most_shared_img ]
     post["title"] = self.title
     # Add some other derived metadata if not present
     if "created" not in post: post["created"] = datetime_to_timestamp(self.start_date)
