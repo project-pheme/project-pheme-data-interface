@@ -7,6 +7,7 @@ logger = logging.getLogger('tornado.general')
 
 from tasks import FuzzyRecurrentTask, register_task
 from repositories import graphdb, ush_v3
+import capture_api
 import state
 
 # Pull Themes (aka Stories) from GraphDB
@@ -111,6 +112,11 @@ class PullPushTask(FuzzyRecurrentTask):
 
   @gen.coroutine
   def workload(self):
+    # Check if the channel may be stale
+    # dc_id = self.pull.channel._id
+    # if not capture_api.get_directory().is_possibly_evolving(dc_id):
+    #   raise gen.Return()
+    #
     logger.info("[%s] doing pull/push" % self.task_id)
     chunk = yield self.pull.pull()
     yield self.push.push(chunk)

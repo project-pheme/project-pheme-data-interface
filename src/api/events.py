@@ -18,6 +18,7 @@ def add_event_from_datachannel(channel):
   ## Create the event
   event = ush_v3.Channel.create_from_datachannel(channel)
   yield ush_v3.get_link().add_event(event)
+  # Start the pull/push task
   logger.info("Starting pull/push routine for event=%s (%s)" % (event._id, event.display_name))
   t = pull_push.create_themes_pull_task(event, period=10, first_delay=(0,2))
   register_task(t, start=True)
@@ -125,6 +126,8 @@ class EventScopeHandler(ModelAPIHandler):
     if "state" in response and response["state"] == "200 OK" and "data" in response and "_global_id" in response["data"]:
       channel = yield capture_api.get_data_channel(response["data"]["_global_id"])
       event = yield add_event_from_datachannel(channel)
+      # Pull updated data channel list from capture
+      yield capture_api.get_directory.update(response["data"]["_global_id"], channel)
       self.success(event)
     else:
       self.error("Invalid response from Capture")

@@ -96,7 +96,6 @@ class RecurrentTask(object):
   def workload(self):
     raise Exception("workload has to be overriden!")
 
-
 class SelfRegulatingTask(RecurrentTask):
   """
   A recurrently running task that self regulates its periodicity
@@ -154,7 +153,6 @@ class FuzzyRecurrentTask(RecurrentTask):
       next_period = gen.sleep(next_sleep)
       yield self._exec()
       yield next_period
-
 
 # List of tasks managed by this module
 task_roster = {}

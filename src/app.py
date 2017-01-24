@@ -11,6 +11,7 @@ import logging
 from model import *
 from tasks import register_task
 import repositories.ush_v3 as ush_v3
+import capture_api
 import pull_push
 import state
 
@@ -41,6 +42,10 @@ def initialise_tasks():
 
   # Ush V3 link initialisation
   yield ush_v3.get_link().initialise_tasks()
+
+  # Datachannel directory initialisation
+  yield capture_api.get_directory().initialise()
+  register_task(capture_api.DatachannelDirectoryRefreshTask(task_id="dcdir-refresh", first_delay=30), start=True)
 
   # Initialise pull/push routine for each of the events/channels
   for (event_id, event) in ush_v3.get_link().events.iteritems():
