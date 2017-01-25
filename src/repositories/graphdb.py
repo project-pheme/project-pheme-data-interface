@@ -292,8 +292,8 @@ class Story(model.Story):   # aka Theme / Pheme
     locations = map(lambda x: dict(
                             userHandle= unicode(x['userHandle']),
                             date= iso8601.parse_date(x['date'].decode()),
-                            lat= x['lat'],
-                            long= x['long'],
+                            lat= float(x['lat']),
+                            long= float(x['long']),
                             text= unicode(x['text'])),
                           result)
 
