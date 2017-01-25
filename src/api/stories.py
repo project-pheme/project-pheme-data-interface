@@ -33,4 +33,6 @@ class StoryDetailHandler(ModelAPIHandler):
     story['images'] = yield graphdb_story.get_linked_images()
     story['articles'] = yield graphdb_story.get_related_articles()
     story['threads'] = yield graphdb.Thread.fetch_from_story(story)
+    author_locations = yield graphdb_story.get_author_locations()
+    story['locations'] = { 'authors': author_locations }
     self.success(story)

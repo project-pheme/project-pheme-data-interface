@@ -258,6 +258,48 @@ class Story(model.Story):   # aka Theme / Pheme
     raise gen.Return(articles)
 
   @gen.coroutine
+  def get_author_locations(self):
+    q = Template("""
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX pub: <http://ontology.ontotext.com/taxonomy/>
+      PREFIX wgs84_pos: <http://www.w3.org/2003/01/geo/wgs84_pos#>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo>
+
+      select ?userHandle ?date ?lat ?long ?text {
+          ?t pheme:version ?pheme_version.
+          FILTER ( ?pheme_version IN $pheme_versions ).
+          ?t pheme:createdAt ?date .
+          ?t pheme:userLocations ?loc.
+          ?t pheme:dataChannel "$data_channel_id".
+          ?t pheme:eventId "$event_id" .
+          ?t dlpo:\#textualContent ?text.
+          ?loc pheme:inst ?location.
+          ?location a pub:Location.
+          ?location pub:exactMatch ?geo.
+          ?geo wgs84_pos:long ?long.
+          ?geo wgs84_pos:lat ?lat.
+          ?t sioc:has_creator ?u.
+          ?u foaf:name ?userName.
+          ?u foaf:accountName ?userHandle.
+      }
+      LIMIT 100
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
+    result = yield query(q)
+
+    locations = map(lambda x: dict(
+                            userHandle= unicode(x['userHandle']),
+                            date= iso8601.parse_date(x['date'].decode()),
+                            lat= x['lat'],
+                            long= x['long'],
+                            text= unicode(x['text'])),
+                          result)
+
+    raise gen.Return(locations)
+
+  @gen.coroutine
   def _get_featured_tweet_alt(self):
     # Just retrieve the oldest tweet from an event
     q = Template("""
