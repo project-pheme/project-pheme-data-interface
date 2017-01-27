@@ -6,6 +6,7 @@ import logging
 import my_json as json
 import repositories.ush_v3 as ush_v3
 import repositories.graphdb as graphdb
+from model import Thread
 
 logger = logging.getLogger('tornado.general')
 
@@ -33,6 +34,7 @@ class StoryDetailHandler(ModelAPIHandler):
     story['images'] = yield graphdb_story.get_linked_images()
     story['articles'] = yield graphdb_story.get_related_articles()
     story['threads'] = yield graphdb.Thread.fetch_from_story(story)
+    story['threads'] = Thread.retweets_cleanup(story['threads'])
     author_locations = yield graphdb_story.get_author_locations()
     story['locations'] = { 'authors': author_locations }
     self.success(story)

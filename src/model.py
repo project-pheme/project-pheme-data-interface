@@ -69,6 +69,33 @@ class Entity(BaseModel):
 class Thread(BaseModel):
   __slots__ = [ 'uri', 'created_at', 'avg_rumour_coefficient', 'evidence', 'featured_tweet', 'verified_authors_present' ]
 
+  @staticmethod
+  def retweets_cleanup(threads):
+    # Given an array of threads, return a new array where the retweets have
+    # been eliminated, leaving only the oldest one
+    import re
+    from copy import copy
+    #
+    threads = sorted(copy(threads), key=lambda thread: thread.featured_tweet['date'])
+    for i in range(0,len(threads)):
+      # All the array has been consumed
+      if i >= len(threads):
+        break
+      text_i = threads[i].featured_tweet['text']
+      # Look for threads where the featured tweet has the same text or (RT.*<same text)
+      popped_k = 0
+      for j in range(i+1, len(threads)):
+        j = j - popped_k   # compensate shrinking list
+        if j >= len(threads):
+          break
+        text_j = threads[j].featured_tweet['text']
+        # Pop from the list any exact text matches or matches with the RT prefix
+        if text_i == text_j or re.match(r'RT\s+%s' % text_i[:130], text_j):
+          threads.pop(j)
+          popped_k = popped_k + 1
+    #
+    return threads
+
 
 class Tweet(BaseModel):
   __slots__ = [ 'uri', 'created_at', 'rumour_coefficient', 'textual_content', 'veracity', 'veracity_score' ]
