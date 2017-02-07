@@ -239,7 +239,7 @@ class Story(model.Story):
     post["values"]["theme-pub-count"] = [ self.pub_count ]
     post["values"]["theme-verified-count"] = [ self.verified_count ]
     post["values"]["theme-most-shared-img"] = [ self.most_shared_img ]
-    post["title"] = self.title
+    post["title"] = self.title[:150]
     # Add some other derived metadata if not present
     if "created" not in post: post["created"] = datetime_to_timestamp(self.start_date)
     if "content" not in post: post["content"] = self.title #"Theme ID %s" % str(self._id)
