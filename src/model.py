@@ -58,7 +58,7 @@ class Story(BaseModel):
       if duration == 0:
         avg = self.size
       else:
-        avg = self.size / (duration / 60.0)
+        avg = self.size / duration
       object.__setattr__(self, 'average_activity', avg)
 
 
@@ -90,7 +90,7 @@ class Thread(BaseModel):
           break
         text_j = threads[j].featured_tweet['text']
         # Pop from the list any exact text matches or matches with the RT prefix
-        if text_i == text_j or re.match(r'RT\s+%s' % text_i[:130], text_j):
+        if text_i == text_j or re.match(r'RT\s+%s' % re.escape(text_i[:130]), text_j):
           threads.pop(j)
           popped_k = popped_k + 1
     #

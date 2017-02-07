@@ -47,6 +47,7 @@ def query(query):
       'Content-Type': 'application/x-www-form-urlencoded'
       },
     body=urllib.urlencode({ 'query': query }),
+    connect_timeout=30,
     request_timeout=300
     )
   http_client = AsyncHTTPClient()
@@ -65,8 +66,7 @@ class Story(model.Story):   # aka Theme / Pheme
     # Query graphdb for latest events belonging to the given channel
     q = Template("""
       PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
-      SELECT ?eventId ?phemeTitle
-             (MAX(?date) AS ?lastUpdate)
+      SELECT ?eventId (MAX(?date) AS ?lastUpdate)
       WHERE {   
           ?a pheme:createdAt ?date.
           FILTER (?date >= "$since_date"^^xsd:dateTime).
@@ -74,9 +74,8 @@ class Story(model.Story):   # aka Theme / Pheme
           FILTER (xsd:integer(?eventId) > -1).
           ?a pheme:dataChannel "$data_channel_id".
           ?a pheme:version ?pheme_version.
-          ?a pheme:eventClusterTitle ?phemeTitle.
           FILTER ( ?pheme_version IN $pheme_versions ).
-      } GROUP BY ?eventId ?phemeTitle
+      } GROUP BY ?eventId
       ORDER BY $order(?lastUpdate)
       LIMIT $limit
     """).substitute(
@@ -91,9 +90,31 @@ class Story(model.Story):   # aka Theme / Pheme
                    Story(channel_id=channel._id,
                          event_id=x['eventId'].decode(),
                          last_activity=iso8601.parse_date(x['lastUpdate'].decode()),
-                         title=x['phemeTitle'].decode(),
                          ), result)
     raise gen.Return(stories)
+
+  @gen.coroutine
+  def get_latest_title(self):
+    q = Template("""
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+      SELECT ?phemeTitle 
+      WHERE {
+        ?a pheme:createdAt ?date.
+        ?a pheme:eventId "$event_id" .
+        ?a pheme:dataChannel "$data_channel_id".
+        ?a pheme:version ?pheme_version.
+        ?a pheme:eventClusterTitle ?phemeTitle.
+        FILTER ( ?pheme_version IN $pheme_versions ).
+      } 
+      ORDER BY DESC(?date)
+      LIMIT 1
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
+    result = yield query(q)
+    assert len(result) == 1
+
+    x = iter(result).next()
+    raise gen.Return(x['phemeTitle'].decode())
 
   @gen.coroutine
   def get_extended_metadata(self):

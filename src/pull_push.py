@@ -15,7 +15,9 @@ class PullThemesGraphDb(object):
   def __init__(self, channel, chunk_size=10):
     self.channel = channel
     self.chunk_size = chunk_size
+    self.x_chunk_size = chunk_size  # we increase the chunk size sometimes
     self.last_date = None
+    self.last_first_event_id = None
 
   def _save_last_update(self, datetime):
     state.set("pull_themes_graphdb_channel_%s.last_update" % self.channel._id, datetime)
@@ -31,11 +33,23 @@ class PullThemesGraphDb(object):
     if self.last_date is None:
       self.last_date = yield self._get_last_update()
     #
-    stories = yield graphdb.Story.fetch_updated_since(self.channel, since=self.last_date, limit=self.chunk_size)
+    stories = yield graphdb.Story.fetch_updated_since(self.channel, since=self.last_date, limit=self.x_chunk_size)
     raise gen.Return(stories)
 
   def set_consumed(self, chunk):
     if len(chunk) > 0:
+      last_first_event_id = chunk[0].event_id
+
+      if last_first_event_id == self.last_first_event_id:
+        # We seem to be stuck without making progress, increase chunk size to try to wrangle through
+        self.x_chunk_size = min(self.x_chunk_size * 2, 256)
+        logger.info("Temporarily increasing fetch chunk size on channel id=%s to %d" % (self.channel._id, self.x_chunk_size))
+      else:
+        # We've made progress, restore default chunk size and save new chunk beginning
+        logger.info("Restoring chunk size in channel id=%s" % self.channel._id)
+        self.x_chunk_size = self.chunk_size
+        self.last_first_event_id = last_first_event_id
+      
       self.last_date = chunk[-1].last_activity
       self._save_last_update(self.last_date)
 
@@ -77,6 +91,7 @@ class PushThemesUshV3(object):
         continue
 
       # The story may have evolved, fetch more details
+      title = yield story.get_latest_title()
       featured_tweet = yield story.get_featured_tweet()
       controversiality = yield story.get_controversiality_score()
       images = yield story.get_linked_images()
@@ -85,6 +100,7 @@ class PushThemesUshV3(object):
 
       # Create and save the story on the ush_v3 repository
       v3_story = ush_v3.Story.as_copy(story,
+        title= title,
         size= xmeta['size'],
         start_date= xmeta['start_date'],
         img_count= xmeta['img_count'],

@@ -43,7 +43,7 @@ def create_data_channel(spec):
   #     "dataSources": [
   #       { "twitter":
   #         { "type": "Twitter"
-  #           "chronologicalOrder": true,
+  #           "chronologicalOrder": false,
   #           "fromLastTweetId": false / <tweet id>,
   #           "keywords": " ... " }
   #       } ]

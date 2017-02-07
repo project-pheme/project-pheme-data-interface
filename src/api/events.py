@@ -106,7 +106,7 @@ class EventScopeHandler(ModelAPIHandler):
     * `dataSources`: array of object
         * `type`: set to `Twitter`
         * `keywords`: twitter search spec
-        * `chronologicalOrder`: optional, default to true
+        * `chronologicalOrder`: optional, default to false
     """
     # If startCaptureDate or endCaptureDate are not specified, come up with values for them
     if "startCaptureDate" not in self.body:
@@ -119,7 +119,9 @@ class EventScopeHandler(ModelAPIHandler):
     #
     for ds in self.body["dataSources"]:
       if not "chronologicalOrder" in ds["twitter"]:
-        ds["twitter"]["chronologicalOrder"] = True
+        ds["twitter"]["chronologicalOrder"] = False
+      if not "historicalLimit" in ds["twitter"]:
+        ds["twitter"]["historicalLimit"] = 1000
     #
     response = yield capture_api.create_data_channel(self.body)
     logger.info("Reply from Capture : " + str(response))
