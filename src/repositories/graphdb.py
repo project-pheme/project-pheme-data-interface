@@ -194,10 +194,17 @@ class Story(model.Story):   # aka Theme / Pheme
     if x['text'] is None:
       logger.info("No replies / retweets in cluster, using alternative query")
       x = yield self._get_featured_tweet_alt()
+    # Decode source to tweet id
+    tweet_id = re.match(r'.*\D(\d+)$', x['source'].decode())
+    if tweet_id is None:
+      raise Exception("Unparseable tweet_id from result %s" % str(x))
+    else:
+      tweet_id = tweet_id.groups()[0]
     # Use results
     if x is not None and x['text'] is not None:
       logger.info("Representative tweet: " + str(x))
       raise gen.Return(dict(
+        tweet_id= tweet_id,
         text= unicode(x['text']),
         date= iso8601.parse_date(x['date'].decode()),
         user= dict(
@@ -330,7 +337,7 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      select ?a ?text ?date ?userName ?userHandle ?avatar ?verified
+      select (?a AS ?source) ?text ?date ?userName ?userHandle ?avatar ?verified
       where {
         ?a pheme:eventId "$event_id".
         ?a pheme:dataChannel "$data_channel_id".
@@ -475,7 +482,13 @@ class Thread(model.Thread):
 
     results = []
     for x in result:
+      tweet_id = re.match(r'.*\D(\d+)$', x['thread'].decode())
+      if tweet_id is None:
+        raise Exception("Unparseable tweet_id from result %s" % str(x))
+      else:
+        tweet_id = tweet_id.groups()[0]
       featured_tweet = dict(
+        tweet_id= tweet_id,
         text= unicode(x['text']),
         date= iso8601.parse_date(x['first'].decode()),
         veracity= _str_to_bool(x['veracity']),
@@ -490,7 +503,7 @@ class Thread(model.Thread):
       #
       tweet_id = re.match(r'.*\D(\d+)$', x['thread'].decode())
       if tweet_id is None:
-        raise Execption("Unparseable tweet_id from result %s" % str(x))
+        raise Exception("Unparseable tweet_id from result %s" % str(x))
       else:
         tweet_id = tweet_id.groups()[0]
       uri = Template("https://twitter.com/$user_screen_name/status/$tweet_id").substitute(
