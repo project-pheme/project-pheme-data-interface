@@ -20,7 +20,7 @@ logger = logging.getLogger('tornado.general')
 theme_pull_period = os.environ["THEME_PULL_PERIOD"] if "THEME_PULL_PERIOD" in os.environ else "300"
 theme_pull_period = int(theme_pull_period)
 
-theme_pull_chunk_size = os.environ["THEME_PULL_CHUNK_SIZE"] if "THEME_PULL_CHUNK_SIZE" in os.environ else "10"
+theme_pull_chunk_size = os.environ["THEME_PULL_CHUNK_SIZE"] if "THEME_PULL_CHUNK_SIZE" in os.environ else "24"
 theme_pull_chunk_size = int(theme_pull_chunk_size)
 
 state_dir_path = os.environ["STATE_DIR_PATH"] if "STATE_DIR_PATH" in os.environ else "."

@@ -9,6 +9,7 @@ import my_json as json
 import capture_api
 import repositories.ush_v3 as ush_v3
 import pull_push
+import state
 from tasks import register_task
 
 logger = logging.getLogger('tornado.general')
@@ -133,6 +134,23 @@ class EventScopeHandler(ModelAPIHandler):
       self.success(event)
     else:
       self.error("Invalid response from Capture")
+
+class EventStateHandler(ModelAPIHandler):
+  __urls__ = [ '/api/event/(?P<datachannel_id>[a-zA-Z0-9_\\-]+)/state/(?P<action>[a-zA-Z]+)/?$' ]
+
+  @gen.coroutine
+  def get(self, datachannel_id, action):
+    if action not in [ 'start', 'pause', 'reset' ]:
+      self.fail("Unrecognizable state action %s" % action)
+    else:
+      if action == 'start':
+        state.set("pull_themes_graphdb_channel_%s.frozen" % datachannel_id, False)
+      elif action == 'pause':
+        state.set("pull_themes_graphdb_channel_%s.frozen" % datachannel_id, True)
+      elif action == 'reset':
+        state.set("pull_themes_graphdb_channel_%s.last_update" % datachannel_id, None)
+      self.success("OK")
+
 
 class EventImportHandler(ModelAPIHandler):
   __urls__ = [ '/api/event/import' ]

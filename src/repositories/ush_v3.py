@@ -148,6 +148,7 @@ class Story(model.Story):
     super(Story, self).__init__(**kwargs)
     featured_tweet = kwargs['featured_tweet'] if 'featured_tweet' in kwargs else None
     object.__setattr__(self, 'featured_tweet', featured_tweet)
+    object.__setattr__(self, '_ush_id', None)
 
   @staticmethod
   def as_copy(story, **kwargs):
@@ -212,8 +213,10 @@ class Story(model.Story):
     existing_post = yield Story._find_post_by_theme_id(self._id)
     if not existing_post:
       # create new one
-      yield self._create()
+      ush_id = yield self._create()
+      object.__setattr__(self, '_ush_id', ush_id)
     else:
+      object.__setattr__(self, '_ush_id', existing_post["id"])
       existing_story = Story._from_post(existing_post)
       if int(existing_story.size) != int(self.size):
         # update existing one
@@ -222,6 +225,15 @@ class Story(model.Story):
         logging.info("Not updating story because it hasn't changed in size")
     # in any case update the last received message for the category (aka event / topic)
     get_link().events[self.channel_id].update_timestamp(self.last_activity)
+
+  @gen.coroutine
+  def upload_fulltext(self, fulltext):
+    request_json = dict(fulltext= fulltext[:65535])
+    response = yield get_link().do_request(
+      "/api/v3/pheme/themes/fulltext/%d" % self._ush_id,
+      method='PUT',
+      body=dumps(request_json),
+    )
 
   def _fill_v3_obj(self, post):
     # Fills v3 object with values from this object
@@ -274,6 +286,7 @@ class Story(model.Story):
       method='POST',
       body=dumps(post_json),
     )
+    raise gen.Return(response["id"])
 
   @gen.coroutine
   def _update(self, existing_post):

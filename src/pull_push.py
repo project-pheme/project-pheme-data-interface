@@ -9,10 +9,11 @@ from tasks import FuzzyRecurrentTask, register_task
 from repositories import graphdb, ush_v3
 import capture_api
 import state
+import model
 
 # Pull Themes (aka Stories) from GraphDB
 class PullThemesGraphDb(object):
-  def __init__(self, channel, chunk_size=10):
+  def __init__(self, channel, chunk_size=24):
     self.channel = channel
     self.chunk_size = chunk_size
     self.x_chunk_size = chunk_size  # we increase the chunk size sometimes
@@ -28,12 +29,21 @@ class PullThemesGraphDb(object):
     raise gen.Return(v)
 
   @gen.coroutine
+  def _get_frozen(self):
+    v = yield state.get("pull_themes_graphdb_channel_%s.frozen" % self.channel._id)
+    raise gen.Return(v)
+
+  @gen.coroutine
   def pull(self):   # pull chunk
-    # Try to pull the last update datetime, if we don't have it (this may still be None after executing)
-    if self.last_date is None:
-      self.last_date = yield self._get_last_update()
+    # Check if the data channel (event/topic) is frozen
+    frozen = yield self._get_frozen()
+    if frozen:
+      raise gen.Return([])
+    # Pull the last update datetime
+    self.last_date = yield self._get_last_update()
     #
     stories = yield graphdb.Story.fetch_updated_since(self.channel, since=self.last_date, limit=self.x_chunk_size)
+    logger.info("(dc=%s) pull query received stories [%s]: " % (self.channel._id, ",".join(map(lambda x: x._id , stories))))
     raise gen.Return(stories)
 
   def set_consumed(self, chunk):
@@ -76,6 +86,7 @@ class PushThemesUshV3(object):
 
   @gen.coroutine
   def push(self, chunk):    # push chunk
+    logger.info("push task query received stories [%s]: " % (",".join(map(lambda x: x._id , chunk))))
     for story in chunk:
       # Convert data model to V3 and save
       # Fetch additional details
@@ -97,6 +108,7 @@ class PushThemesUshV3(object):
       images = yield story.get_linked_images()
       images = sorted(images, lambda x,y: y['count'] - x['count'])
       most_shared_img = images[0]['imgUrl'] if len(images) > 0 else ""
+      tweet_texts = yield story.get_tweet_texts()
 
       # Create and save the story on the ush_v3 repository
       v3_story = ush_v3.Story.as_copy(story,
@@ -111,6 +123,7 @@ class PushThemesUshV3(object):
         most_shared_img = most_shared_img)
 
       yield v3_story.save()
+      yield v3_story.upload_fulltext(' '.join([model.clean_text(title)] + tweet_texts))
 
       # Save size of the story in case we see it again (used by _size_has_grown)
       self._size_remember(v3_story)
@@ -145,7 +158,7 @@ def create_themes_pull_task(channel, **kwargs):
 
   task_id = "themes_pull_task_%s" % channel._id
   period = kwargs['period'] if 'period' in kwargs else 60
-  chunk_size = kwargs['chunk_size'] if 'chunk_size' in kwargs else 10
+  chunk_size = kwargs['chunk_size'] if 'chunk_size' in kwargs else 24
   first_delay = kwargs['first_delay'] if 'first_delay' in kwargs else (0, 15)
   min_cluster_size = kwargs['min_cluster_size'] if 'min_cluster_size' in kwargs else 2
 

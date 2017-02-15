@@ -398,6 +398,31 @@ class Story(model.Story):   # aka Theme / Pheme
       raise gen.Return(1.0 - (9.0/2.0) * score)
 
   @gen.coroutine
+  def get_tweet_texts(self):
+    def clean_list(texts):
+      from collections import OrderedDict
+      return list(OrderedDict.fromkeys(texts))
+    #
+    q = Template("""
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo#>
+
+      select ?a ?text {
+        ?a a pheme:Tweet .
+        ?a pheme:eventId "$event_id".
+        ?a pheme:dataChannel "$data_channel_id".
+        ?a dlpo:textualContent ?text.
+        ?a pheme:version ?pheme_version.
+        FILTER ( ?pheme_version IN $pheme_versions ).
+      }
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
+    result = yield query(q)
+
+    texts = clean_list(map(lambda x: model.clean_text(unicode(x['text'])), result))
+    raise gen.Return(texts)
+
+  @gen.coroutine
   def get_author_geolocations(self):
     # Articles referenced from the Story (cluster) tweets
     raise Exception("not implemented")

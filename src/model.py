@@ -2,6 +2,14 @@
 
 from tornado import gen
 
+def clean_text(text):
+  import re
+  text = re.sub(r'https?:\/\/\S+', '', text, flags=re.MULTILINE)
+  text = re.sub(r't\.co\/\S+', '', text, flags=re.MULTILINE)
+  text = re.sub(r'(\w+):', r'\1', text, flags=re.MULTILINE)
+  text = re.sub(r'(\s)\s+', r'\1', text, flags=re.MULTILINE)
+  return text
+
 class ReadOnlyError(Exception):
   pass
 
