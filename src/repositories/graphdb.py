@@ -389,6 +389,8 @@ class Story(model.Story):   # aka Theme / Pheme
     # avoid division by 0
     if c == 0.0:
       raise gen.Return(0.0)
+    elif c < 7.0: # less than 7 tweets means inconclusive result
+      raise gen.Return(-0.1)
     else:
       score = (1.0/3.0) * (
                 pow(v['support'] / c - (1.0/3.0), 2) +
