@@ -108,6 +108,7 @@ class PushThemesUshV3(object):
       images = yield story.get_linked_images()
       images = sorted(images, lambda x,y: y['count'] - x['count'])
       most_shared_img = images[0]['imgUrl'] if len(images) > 0 else ""
+      veracity_data = yield story.get_last_veracity()
       tweet_texts = yield story.get_tweet_texts()
 
       # Create and save the story on the ush_v3 repository
@@ -120,7 +121,10 @@ class PushThemesUshV3(object):
         verified_count = xmeta['verified_count'],
         featured_tweet= featured_tweet,
         controversiality= controversiality,
-        most_shared_img = most_shared_img)
+        most_shared_img = most_shared_img,
+        veracity = veracity_data['veracity'],
+        veracity_score = veracity_data['veracity_score']
+        )
 
       yield v3_story.save()
       yield v3_story.upload_fulltext(' '.join([model.clean_text(title)] + tweet_texts))

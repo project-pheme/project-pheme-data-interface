@@ -42,9 +42,9 @@ class Channel(BaseModel):
 
 class Story(BaseModel):
   __slots__ = [ '_id', 'channel_id', 'event_id', 'size',
-    'start_date', 'last_activity', 'average_activity', 
+    'source_type', 'start_date', 'last_activity', 'average_activity', 
     'controversiality', 'pub_count', 'img_count', 'verified_count',
-    'title', 'most_shared_img' ]
+    'title', 'most_shared_img', 'veracity', 'veracity_score' ]
 
   @staticmethod
   def idgen(channel_id, event_id):

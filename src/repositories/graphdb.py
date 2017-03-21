@@ -66,8 +66,10 @@ class Story(model.Story):   # aka Theme / Pheme
     # Query graphdb for latest events belonging to the given channel
     q = Template("""
       PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
-      SELECT ?eventId (MAX(?date) AS ?lastUpdate)
-      WHERE {   
+      SELECT ?eventId ?sourceType (MAX(?date) AS ?lastUpdate)
+      WHERE {
+          ?a a pheme:Tweet .
+          ?a pheme:sourceType ?sourceType.
           ?a pheme:createdAt ?date.
           FILTER (?date >= "$since_date"^^xsd:dateTime).
           ?a pheme:eventId ?eventId.
@@ -75,7 +77,7 @@ class Story(model.Story):   # aka Theme / Pheme
           ?a pheme:dataChannel "$data_channel_id".
           ?a pheme:version ?pheme_version.
           FILTER ( ?pheme_version IN $pheme_versions ).
-      } GROUP BY ?eventId
+      } GROUP BY ?eventId ?sourceType
       ORDER BY $order(?lastUpdate)
       LIMIT $limit
     """).substitute(
@@ -89,6 +91,7 @@ class Story(model.Story):   # aka Theme / Pheme
     stories = map(lambda x:
                    Story(channel_id=channel._id,
                          event_id=x['eventId'].decode(),
+                         source_type=x['sourceType'].decode().lower(),
                          last_activity=iso8601.parse_date(x['lastUpdate'].decode()),
                          ), result)
     raise gen.Return(stories)
@@ -165,8 +168,9 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
-      select ?thread ?source ?text ?userName ?userHandle ?verified ?date (count(?a) as ?countReplies) ?avatar where {   
+      select ?thread ?source ?sourceType ?text ?userName ?userHandle ?verified ?date (count(?a) as ?countReplies) ?avatar where {   
         ?a a pheme:ReplyingTweet .
+        ?a pheme:sourceType ?sourceType .
         ?source a pheme:SourceTweet.
         ?source sioc:has_container ?thread.
         ?source sioc:has_creator ?creator.
@@ -182,7 +186,7 @@ class Story(model.Story):   # aka Theme / Pheme
         ?a pheme:dataChannel "$data_channel_id".
         ?a pheme:version ?pheme_version.
         FILTER ( ?pheme_version IN $pheme_versions ).
-      } GROUP BY ?thread ?source ?text ?userName ?userHandle ?verified ?date ?avatar
+      } GROUP BY ?thread ?source ?sourceType ?text ?userName ?userHandle ?verified ?date ?avatar
       order by desc(?countReplies)
       limit 1
     """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
@@ -194,12 +198,17 @@ class Story(model.Story):   # aka Theme / Pheme
     if x['text'] is None:
       logger.info("No replies / retweets in cluster, using alternative query")
       x = yield self._get_featured_tweet_alt()
+    #
+    source_type = x['sourceType'].decode()
     # Decode source to tweet id
-    tweet_id = re.match(r'.*\D(\d+)$', x['source'].decode())
-    if tweet_id is None:
-      raise Exception("Unparseable tweet_id from result %s" % str(x))
+    if source_type.lower() == 'twitter':
+      tweet_id = re.match(r'.*\D(\d+)$', x['source'].decode())
+      if tweet_id is None:
+        raise Exception("Unparseable tweet_id from result %s" % str(x))
+      else:
+        tweet_id = tweet_id.groups()[0]
     else:
-      tweet_id = tweet_id.groups()[0]
+      tweet_id = "#%s-noid" % source_type
     # Use results
     if x is not None and x['text'] is not None:
       logger.info("Representative tweet: " + str(x))
@@ -337,8 +346,9 @@ class Story(model.Story):   # aka Theme / Pheme
       PREFIX sioc: <http://rdfs.org/sioc/ns#>
       PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 
-      select (?a AS ?source) ?text ?date ?userName ?userHandle ?avatar ?verified
+      select (?a AS ?source) ?sourceType ?text ?date ?userName ?userHandle ?avatar ?verified
       where {
+        ?a pheme:sourceType ?sourceType .
         ?a pheme:eventId "$event_id".
         ?a pheme:dataChannel "$data_channel_id".
         ?a pheme:createdAt ?date.
@@ -425,6 +435,40 @@ class Story(model.Story):   # aka Theme / Pheme
     raise gen.Return(texts)
 
   @gen.coroutine
+  def get_last_veracity(self):
+    q = Template("""
+      PREFIX sioc: <http://rdfs.org/sioc/ns#>
+      PREFIX pheme: <http://www.pheme.eu/ontology/pheme#>
+      PREFIX dlpo: <http://www.semanticdesktop.org/ontologies/2011/10/05/dlpo#>
+      PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+      PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+      select ?veracity ?veracity_score
+        {
+        ?tweet a pheme:Tweet .
+        ?tweet pheme:eventId "$event_id".
+        ?tweet pheme:dataChannel "$data_channel_id".
+        ?tweet pheme:createdAt ?date .
+        ?tweet pheme:version ?pheme_version.
+        FILTER ( ?pheme_version IN $pheme_versions ).
+        ?tweet pheme:veracity ?veracity .
+        ?tweet pheme:veracityScore ?veracity_score .
+        }
+        order by DESC(?date)
+        limit 1
+    """).substitute(event_id=self.event_id, data_channel_id=self.channel_id, pheme_versions=_graphdb_pheme_versions)
+    result = yield query(q)
+
+    if len(result) == 1:
+      row = iter(result).next()
+      veracity = _str_to_bool(row['veracity'])
+      veracity_score = row['veracity_score'] or 0.0
+      ret = dict(veracity= veracity, veracity_score= float(veracity_score))
+    else:
+      ret = dict(veracity= False, veracity_score= 0.0)
+    raise gen.Return(ret)
+
+  @gen.coroutine
   def get_author_geolocations(self):
     # Articles referenced from the Story (cluster) tweets
     raise Exception("not implemented")
@@ -462,7 +506,6 @@ class Thread(model.Thread):
   #     t = Thread(uri= "random%d" % x, featured_tweet=featured_tweet)
   #     results.append(t)
   #   raise gen.Return(results)
-
   @staticmethod
   @gen.coroutine
   def fetch_from_story(story):
@@ -509,11 +552,15 @@ class Thread(model.Thread):
 
     results = []
     for x in result:
-      tweet_id = re.match(r'.*\D(\d+)$', x['thread'].decode())
-      if tweet_id is None:
-        raise Exception("Unparseable tweet_id from result %s" % str(x))
+      if story['source_type'].lower() == 'twitter':
+        tweet_id = re.match(r'.*\D(\d+)$', x['thread'].decode())
+        if tweet_id is None:
+          raise Exception("Unparseable tweet_id from result %s" % str(x))
+        else:
+          tweet_id = tweet_id.groups()[0]
       else:
-        tweet_id = tweet_id.groups()[0]
+        tweet_id = "#%s-noid" % story['source_type']
+      #
       featured_tweet = dict(
         tweet_id= tweet_id,
         text= unicode(x['text']),
@@ -528,11 +575,6 @@ class Thread(model.Thread):
           )
         )
       #
-      tweet_id = re.match(r'.*\D(\d+)$', x['thread'].decode())
-      if tweet_id is None:
-        raise Exception("Unparseable tweet_id from result %s" % str(x))
-      else:
-        tweet_id = tweet_id.groups()[0]
       uri = Template("https://twitter.com/$user_screen_name/status/$tweet_id").substitute(
         user_screen_name= x['accountName'],
         tweet_id= tweet_id

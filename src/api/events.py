@@ -82,12 +82,11 @@ class EventScopeHandler(ModelAPIHandler):
                   "keywords": { "type": "string" },
                   "chronologicalOrder": { "type": "boolean" }
                 },
-                "additionalProperties": False,
+                "additionalProperties": True,
                 "required": [ "type", "keywords" ]
               }
             },
-            "additionalProperties": False,
-            "required": [ "twitter" ]
+            "additionalProperties": True
           }
         }
       },
@@ -118,7 +117,10 @@ class EventScopeHandler(ModelAPIHandler):
       # defaults to 15 days from now
       self.body["endCaptureDate"] = (datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d %H:%M:%S.000")
     #
+    # Enable historical collection for twitter datasources
     for ds in self.body["dataSources"]:
+      if not "twitter" in ds:
+        continue
       if not "chronologicalOrder" in ds["twitter"]:
         ds["twitter"]["chronologicalOrder"] = False
       if not "historicalLimit" in ds["twitter"]:

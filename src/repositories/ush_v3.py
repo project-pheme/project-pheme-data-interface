@@ -41,10 +41,16 @@ required_post_types = {
         { "label": "Image count",      "type": "int",      "input": "number", "required": True, "key": "theme-img-count" },
         { "label": "Verified count",   "type": "int",      "input": "number", "required": True, "key": "theme-verified-count" },
         { "label": "Most shared image","type": "varchar",  "input": "text",   "required": True, "key": "theme-most-shared-img" },
+        { "label": "Veracity",         "type": "varchar",  "input": "text",   "required": True, "key": "theme-veracity" },
+        { "label": "Veracity Score",   "type": "decimal",  "input": "number", "required": True, "key": "theme-veracity-score" },
+        { "label": "Source type",      "type": "varchar",  "input": "text",   "required": True, "key": "theme-source-type" }, 
       ]
     }]
   }
 }
+
+def _str_to_bool(str):
+  return (str or "").lower() in [ 'true', '1' ]
 
 v3_link = None
 def get_link():
@@ -193,6 +199,7 @@ class Story(model.Story):
     return Story(
         event_id= post["values"]["theme-event-id"][0],
         channel_id= post["values"]["theme-channel-id"][0],
+        source_type= post["values"]["theme-source-type"][0],
         size= int(post["values"]["theme-size"][0]),
         start_date= string_to_datetime(post["values"]["theme-start-date"][0]),
         last_activity= string_to_datetime(post["values"]["theme-last-activity"][0]),
@@ -201,7 +208,9 @@ class Story(model.Story):
         img_count = post["values"]["theme-img-count"][0],
         pub_count = post["values"]["theme-pub-count"][0],
         verified_count = post["values"]["theme-verified-count"][0],
-        most_shared_img = post["values"]["theme-most-shared-img"][0]
+        most_shared_img = post["values"]["theme-most-shared-img"][0],
+        veracity = _str_to_bool(post["values"]["theme-veracity"][0]),
+        veracity_score = float(post["values"]["theme-veracity-score"][0]),
         )
 
   @gen.coroutine
@@ -241,6 +250,7 @@ class Story(model.Story):
     post["values"]["theme-id"] = [ self._id ]
     post["values"]["theme-channel-id"] = [ self.channel_id ]
     post["values"]["theme-event-id"] = [ self.event_id ]
+    post["values"]["theme-source-type"] = [ self.source_type ]
     post["values"]["theme-size"] = [ self.size ]
     post["values"]["theme-start-date"] = [ datetime_to_string(self.start_date) ]
     post["values"]["theme-last-activity" ] = [ datetime_to_string(self.last_activity) ]
@@ -251,6 +261,8 @@ class Story(model.Story):
     post["values"]["theme-pub-count"] = [ self.pub_count ]
     post["values"]["theme-verified-count"] = [ self.verified_count ]
     post["values"]["theme-most-shared-img"] = [ self.most_shared_img ]
+    post["values"]["theme-veracity"] = [ str(self.veracity) ]
+    post["values"]["theme-veracity-score"] = [ "%0.2f" % self.veracity_score ]
     post["title"] = self.title[:150]
     # Add some other derived metadata if not present
     if "created" not in post: post["created"] = datetime_to_timestamp(self.start_date)
