@@ -11,9 +11,9 @@ import logging, urllib, pytz, os, re
 
 import iso8601
 
-GRAPHDB_ENDPOINT = os.environ["GRAPHDB_ENDPOINT"] if "GRAPHDB_ENDPOINT" in os.environ else 'http://pheme.ontotext.com/graphdb/repositories/pheme'
+GRAPHDB_ENDPOINT = os.environ["GRAPHDB_ENDPOINT"] if "GRAPHDB_ENDPOINT" in os.environ else 'http://pheme.ontotext.com/repositories/pheme'
 
-GRAPHDB_PHEME_VERSIONS=[ "v8" ]
+GRAPHDB_PHEME_VERSIONS = [ "v8" ]
 
 logger = logging.getLogger('tornado.general')
 
@@ -532,6 +532,7 @@ class Thread(model.Thread):
             ?tweet pheme:eventId "$event_id" .
             } group by ?thread 
           }
+        ?tweet pheme:sourceType ?sourceType .
         ?tweet sioc:has_container ?thread .
         ?tweet pheme:createdAt ?first .
         ?tweet dlpo:textualContent ?text .
@@ -552,17 +553,18 @@ class Thread(model.Thread):
 
     results = []
     for x in result:
-      if story['source_type'].lower() == 'twitter':
+      if x['sourceType'].lower() == 'twitter':
         tweet_id = re.match(r'.*\D(\d+)$', x['thread'].decode())
         if tweet_id is None:
           raise Exception("Unparseable tweet_id from result %s" % str(x))
         else:
           tweet_id = tweet_id.groups()[0]
       else:
-        tweet_id = "#%s-noid" % story['source_type']
+        tweet_id = "#%s-noid" % x['sourceType']
       #
       featured_tweet = dict(
         tweet_id= tweet_id,
+        source_type= x['sourceType'],
         text= unicode(x['text']),
         date= iso8601.parse_date(x['first'].decode()),
         veracity= _str_to_bool(x['veracity']),
