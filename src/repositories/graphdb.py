@@ -117,7 +117,7 @@ class Story(model.Story):   # aka Theme / Pheme
     assert len(result) == 1
 
     x = iter(result).next()
-    raise gen.Return(x['phemeTitle'].decode())
+    raise gen.Return(unicode(x['phemeTitle']))
 
   @gen.coroutine
   def get_extended_metadata(self):
