@@ -280,6 +280,8 @@ class Story(model.Story):   # aka Theme / Pheme
                           url= x['URL'].decode()),
                          result)
 
+    logger.info("- canonicalising %d URLs" % len(articles))
+
     from url_utils import get_canonical_url
     from urlparse import urlparse
     for art in articles:

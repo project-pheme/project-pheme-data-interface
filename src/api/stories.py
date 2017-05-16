@@ -27,14 +27,25 @@ class StoryDetailHandler(ModelAPIHandler):
   def get(self, story_id):
     story = yield ush_v3.Story.find_by_post_id(story_id)
     if not story:
+      logger.error("/api/stories/%s -- story not found" % str(story_id))
       self.error("story %s is not in the database" % story_id)
       return
     graphdb_story = graphdb.Story(channel_id= story.channel_id, event_id= story.event_id)
     story = story.obj()
+
+    logger.info("/api/stories/%s -- getting linked images" % str(story_id))
     story['images'] = yield graphdb_story.get_linked_images()
+
+    logger.info("/api/stories/%s -- getting related articles" % str(story_id))
     story['articles'] = yield graphdb_story.get_related_articles()
+
+    logger.info("/api/stories/%s -- getting threads" % str(story_id))
     story['threads'] = yield graphdb.Thread.fetch_from_story(story)
     story['threads'] = Thread.retweets_cleanup(story['threads'])
+
+    logger.info("/api/stories/%s -- getting author locations" % str(story_id))
     author_locations = yield graphdb_story.get_author_locations()
     story['locations'] = { 'authors': author_locations }
+
+    logger.info("/api/stories/%s -- returning story results" % str(story_id))
     self.success(story)
