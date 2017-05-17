@@ -1,4 +1,4 @@
-from tornado.httpclient import HTTPRequest, AsyncHTTPClient
+from tornado.httpclient import HTTPError, HTTPRequest, AsyncHTTPClient
 from tornado import gen
 from my_json import loads, dumps
 from string import Template
@@ -125,12 +125,13 @@ class Channel(model.Channel):
     # Create a v3 category associated to this data channel
     tag_json = {
       "type": "category",
-      "tag": self.display_name,
+      "tag": re.sub("[^\w\s\d.,-_\(\)]", "-", self.display_name),
       "description": self.description,
       "slug": self.encode_slug(),
       "icon": "tag",
       "updated": datetime_to_timestamp(self.updated)
     }
+    logger.info("-- creating category in ushahidi v3 with body: %s" % str(dumps(tag_json)))
     tag = yield get_link().do_request("/api/v3/tags", method='POST', body=dumps(tag_json))
     self.set_category_id(tag["id"])
 
@@ -403,8 +404,13 @@ class UshahidiV3Link(object):
       
       r = HTTPRequest(url, **kwargs)
       http_client = AsyncHTTPClient()
-      response = yield http_client.fetch(r)
+      try:
+        response = yield http_client.fetch(r)
+      except HTTPError, e:
+        logger.error("-- v3 operation yielded error code. Response body:\n%s" % str(e.response.body))
+        raise e
       if response.error:
+        logger.error("-- Error processing v3 operation. Response body:\n%s" % str(response.body));
         raise Exception("Problem doing request to Ushahidi v3 instance")
       else:
         raise gen.Return(loads(response.body))
