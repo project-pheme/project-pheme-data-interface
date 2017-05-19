@@ -393,6 +393,8 @@ class Story(model.Story):   # aka Theme / Pheme
     # v will hold the count for each sdq_type
     v = dict(deny=0.0, support=0.0, question=0.0)
     for x in result:
+      if x['sdq_type'] is None:
+        continue
       sdq_type = x['sdq_type'].decode()
       sdq_count = int(x['count'].decode())
       v[sdq_type] = float(sdq_count)
